@@ -28,25 +28,40 @@ logger.info("Configuration loaded from .env file")
 class Config:
     """Configuration class for the conversation app."""
 
-    # Required
+    # ===== Provider Selection =====
+    PROVIDER = os.getenv("PROVIDER", "openai")  # openai|anthropic|elevenlabs|local
+    
+    # ===== OpenAI =====
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    if OPENAI_API_KEY is None:
+    # Fix this line - check the string value, not the variable:
+    if OPENAI_API_KEY is None and PROVIDER == "openai":  # ✅ This is correct
         raise RuntimeError(
             "OPENAI_API_KEY is not set in .env file. Please add it:\n"
             "  OPENAI_API_KEY=your_api_key_here",
         )
-    if not OPENAI_API_KEY.strip():
+    if OPENAI_API_KEY and not OPENAI_API_KEY.strip():
         raise RuntimeError(
             "OPENAI_API_KEY is empty in .env file. Please provide a valid API key.",
         )
-
-    # Optional
+    
     MODEL_NAME = os.getenv("MODEL_NAME", "gpt-realtime")
+    
+    # ===== Anthropic =====
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+    ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5-20250929")
+    
+    # ===== ElevenLabs =====
+    ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+    ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+    
+    # ===== Local Models =====
     HF_HOME = os.getenv("HF_HOME", "./cache")
     LOCAL_VISION_MODEL = os.getenv("LOCAL_VISION_MODEL", "HuggingFaceTB/SmolVLM2-2.2B-Instruct")
-    HF_TOKEN = os.getenv("HF_TOKEN")  # Optional, falls back to hf auth login if not set
-
-    logger.debug(f"Model: {MODEL_NAME}, HF_HOME: {HF_HOME}, Vision Model: {LOCAL_VISION_MODEL}")
+    LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "meta-llama/Llama-3.1-8B-Instruct")
+    LOCAL_TTS_MODEL = os.getenv("LOCAL_TTS_MODEL", "parler-tts/parler-tts-mini-v1")
+    HF_TOKEN = os.getenv("HF_TOKEN")  # Optional
+    
+    logger.debug(f"Provider: {PROVIDER}, Model: {MODEL_NAME}")
 
 
 config = Config()

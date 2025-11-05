@@ -12,8 +12,7 @@ import librosa
 from fastrtc import AdditionalOutputs, audio_to_int16, audio_to_float32
 
 from reachy_mini import ReachyMini
-from reachy_mini_conversation_app.openai_realtime import OpenaiRealtimeHandler
-
+from reachy_mini_conversation_app.providers.openai_realtime import OpenAIRealtimeProvider
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 class LocalStream:
     """LocalStream using Reachy Mini's recorder/player."""
 
-    def __init__(self, handler: OpenaiRealtimeHandler, robot: ReachyMini):
+    def __init__(self, handler: OpenAIRealtimeProvider, robot: ReachyMini):
         """Initialize the stream with an OpenAI realtime handler and pipelines."""
         self.handler = handler
         self._robot = robot

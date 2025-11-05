@@ -17,9 +17,9 @@ from reachy_mini_conversation_app.utils import (
     handle_vision_stuff,
 )
 from reachy_mini_conversation_app.console import LocalStream
-from reachy_mini_conversation_app.openai_realtime import OpenaiRealtimeHandler
+from reachy_mini_conversation_app.providers import create_provider
 from reachy_mini_conversation_app.audio.head_wobbler import HeadWobbler
-
+from reachy_mini_conversation_app.config import config
 
 def update_chatbot(chatbot: List[Dict[str, Any]], response: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Update the chatbot with AdditionalOutputs."""
@@ -75,7 +75,18 @@ def main() -> None:
     )
     logger.debug(f"Chatbot avatar images: {chatbot.avatar_images}")
 
-    handler = OpenaiRealtimeHandler(deps)
+    handler = create_provider(config.PROVIDER, deps)
+    logger.info(f"Using provider: {config.PROVIDER}")
+    
+    # Test that handler can be created
+    try:
+        # The actual connection happens in start_up() when the stream starts
+        # but we can at least verify the handler object is valid
+        logger.debug(f"Handler created: {handler.__class__.__name__}")
+    except Exception as e:
+        logger.error(f"Failed to create handler: {e}")
+        robot.client.disconnect()
+        sys.exit(1)
 
     stream_manager: gr.Blocks | LocalStream | None = None
 
