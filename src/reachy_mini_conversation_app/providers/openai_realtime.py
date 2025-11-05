@@ -327,6 +327,12 @@ class OpenAIRealtimeProvider(BaseConversationProvider):
                 logger.error("   Make sure you have access to the realtime API")
             elif "connection" in str(e).lower() or "timeout" in str(e).lower():
                 logger.error("❌ Connection failed - check your internet connection")
+            elif "429" in str(error_message) or ("rate" in error_str and "limit" in error_str):
+                logger.error("")
+                logger.error("⏱️  RATE LIMIT EXCEEDED (429)")
+                logger.error("   → You're sending too many requests")
+                logger.error("   → Wait a moment and try again")
+                logger.error("   → Or upgrade to a higher tier")
             
             logger.error("=" * 60)
             raise  # Re-raise so the app knows it failed
