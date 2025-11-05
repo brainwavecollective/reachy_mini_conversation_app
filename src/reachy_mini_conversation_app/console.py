@@ -8,7 +8,10 @@ import asyncio
 import logging
 from typing import List
 
-import librosa
+import math
+import numpy as np
+from scipy.signal import resample_poly
+
 from fastrtc import AdditionalOutputs, audio_to_int16, audio_to_float32
 
 from reachy_mini import ReachyMini
@@ -16,6 +19,17 @@ from reachy_mini_conversation_app.providers.openai_realtime import OpenAIRealtim
 
 logger = logging.getLogger(__name__)
 
+
+def resample_int16_mono(x_int16: np.ndarray, sr_in: int, sr_out: int) -> np.ndarray:
+    """High-quality mono PCM16 resampler using polyphase filtering."""
+    if sr_in == sr_out or x_int16.size == 0:
+        return x_int16
+    x = x_int16.astype(np.float32) / 32768.0
+    g = math.gcd(sr_in, sr_out)
+    up, down = sr_out // g, sr_in // g
+    y = resample_poly(x, up, down)
+    return np.clip(np.round(y * 32768.0), -32768, 32767).astype(np.int16)
+    
 
 class LocalStream:
     """LocalStream using Reachy Mini's recorder/player."""
@@ -72,21 +86,27 @@ class LocalStream:
         self._robot.media.stop_playing()
 
     def clear_audio_queue(self) -> None:
-        """Flush the player's appsrc to drop any queued audio immediately."""
         logger.info("User intervention: flushing player queue")
-        self.handler.output_queue = asyncio.Queue()
+        q = self.handler.output_queue
+        try:
+            while True:
+                q.get_nowait()
+                q.task_done()
+        except asyncio.QueueEmpty:
+            pass
+
 
     async def record_loop(self) -> None:
         """Read mic frames from the recorder and forward them to the handler."""
         logger.info("Starting receive loop")
+        mic_sr = getattr(self._robot.media, "SAMPLE_RATE", 16000)  # fallback to 16k
         while not self._stop_event.is_set():
             audio_frame = self._robot.media.get_audio_sample()
             if audio_frame is not None:
-                frame_mono = audio_frame.T[0]  # both channels are identical
+                frame_mono = audio_frame.T[0]  # device provides mono; safe
                 frame = audio_to_int16(frame_mono)
-                await self.handler.receive((16000, frame))
-
-            await asyncio.sleep(0.01)  # avoid busy loop
+                await self.handler.receive((mic_sr, frame))  # CHANGED: use mic_sr
+            await asyncio.sleep(0.01)
 
     async def play_loop(self) -> None:
         """Fetch outputs from the handler: log text and play audio frames."""
@@ -106,15 +126,24 @@ class LocalStream:
             elif isinstance(handler_output, tuple):
                 input_sample_rate, audio_frame = handler_output
                 device_sample_rate = self._robot.media.get_audio_samplerate()
-                audio_frame_float = audio_to_float32(audio_frame.squeeze())
 
+                # Normalize to int16 mono 1-D no matter what came in
+                mono_int16 = np.asarray(audio_frame, dtype=np.int16).reshape(-1)
                 if input_sample_rate != device_sample_rate:
-                    audio_frame_float = librosa.resample(
-                        audio_frame_float,
-                        orig_sr=input_sample_rate,
-                        target_sr=device_sample_rate,
-                    )
+                    mono_int16 = resample_int16_mono(mono_int16, input_sample_rate, device_sample_rate)
 
+                audio_frame_float = audio_to_float32(mono_int16)  # -> float32 [-1, 1]
+                
+                if not hasattr(self, "_logged_play_stats"):
+                    self._logged_play_stats = True
+                    logger.debug("play: sr=%s len=%s dtype=%s min=%.3f max=%.3f",
+                                 device_sample_rate,
+                                 audio_frame_float.size,
+                                 audio_frame_float.dtype,
+                                 float(audio_frame_float.min()),
+                                 float(audio_frame_float.max()))
+
+                # device expects 1-D mono float32
                 self._robot.media.push_audio_sample(audio_frame_float)
 
             else:
