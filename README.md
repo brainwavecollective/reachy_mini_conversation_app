@@ -117,6 +117,8 @@ source .venv/bin/activate
 
 uv pip install jsonschema pydub
 
+sudo apt install ffmpeg
+
 
 $ python bin/offline_actions.py --actions-dir actions --select random --pause-sec 7
 
