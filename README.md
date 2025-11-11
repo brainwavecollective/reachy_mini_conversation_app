@@ -91,7 +91,7 @@ Some wheels (e.g. PyTorch) are large and require compatible CUDA or CPU buildsâ€
 | `HF_TOKEN` | Optional token for Hugging Face models (only used with `--local-vision` flag, falls back to `huggingface-cli login`).
 | `LOCAL_VISION_MODEL` | Hugging Face model path for local vision processing (only used with `--local-vision` flag, defaults to `HuggingFaceTB/SmolVLM2-2.2B-Instruct`).
 
-## Running the app
+## Running the app 
 
 Activate your virtual environment, ensure the Reachy Mini robot (or simulator) is reachable, then launch:
 
@@ -100,6 +100,23 @@ reachy-mini-conversation-app
 ```
 
 By default, the app runs in console mode for direct audio interaction. Use the `--gradio` flag to launch a web UI served locally at http://127.0.0.1:7860/ (required when running in simulation mode). With a camera attached, vision is handled by the gpt-realtime model when the camera tool is used. For local vision processing, use the `--local-vision` flag to process frames periodically using the SmolVLM2 model. Additionally, you can enable face tracking via YOLO or MediaPipe pipelines depending on the extras you installed.
+
+## Running an offline demo loop 
+WIP and if you're reading this you're drinking from the firehose.  
+Goal is to be able to run an offline demo loop that doesn't need the internet and can be run on a low power device (e.g. CPU on a laptop).  
+The intention is for this to be very simple to setup/interact with but there is theoretically a good bit of customization available.  
+
+Lay of the land (theoretically... at least this is the plan): 
+/bin/action_schema.json - expectations for actions structure
+/bin/offline_actions.py - standalone for now (ideally integrate as a flag)
+/actions/*.json
+
+
+--- misc tbd to be revisited
+uv pip install jsonschema simpleaudio soundfile numpy
+
+
+
 
 ### CLI options
 
@@ -110,7 +127,6 @@ By default, the app runs in console mode for direct audio interaction. Use the `
 | `--local-vision` | `False` | Use local vision model (SmolVLM2) for periodic image processing instead of gpt-realtime vision. Requires `local_vision` extra to be installed. |
 | `--gradio` | `False` | Launch the Gradio web UI. Without this flag, runs in console mode. Required when running in simulation mode. |
 | `--debug` | `False` | Enable verbose logging for troubleshooting. |
-
 
 ### Examples
 - Run on hardware with MediaPipe face tracking:

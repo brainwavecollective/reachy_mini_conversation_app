@@ -1,0 +1,8 @@
+{
+  "name": "chill",
+  "steps": [
+    { "move": "side_to_side_sway", "duration": 2.0 },
+    { "reactive_sound": "hf:soft_pad.wav", "duration": 4.0 },
+    { "move": { "pick": { "items": ["side_to_side_sway", "head_tilt_roll"] } } }
+  ]
+}
