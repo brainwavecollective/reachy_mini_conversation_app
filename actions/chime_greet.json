@@ -3,7 +3,7 @@
   "head_tracking": { "enabled": true, "backend": "yolo" },
   "steps": [
     { "move": "yeah_nod", "duration": 1.8 },
-    { "sound": { "pick": { "items": ["hf:chime1.wav", "hf:chime2.wav"] } }, "duration": 1.2 },
-    { "reactive_sound": "hf:pad_a.wav", "latency": 0.08, "duration": 3.5 }
+    { "sound": { "pick": { "items": ["hf:succss2.wav", "hf:success1.wav"] } }, "duration": 1.2 },
+    { "reactive_sound": "hf:helpful2.wav", "latency": 0.08, "duration": 3.5 }
   ]
 }
