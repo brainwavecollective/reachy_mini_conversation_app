@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import contextlib
+
 import argparse
 import difflib
 import json
@@ -425,6 +427,9 @@ def apply_action(ctx, action: ActionDoc, rr_state: RoundRobinState) -> None:
     logger = logging.getLogger(__name__)
     action_id = action.get("name", "unnamed")
 
+    used_moves: set[str] = set()
+    used_sounds: set[str] = set()
+
     logger.info("=== START ACTION: %s ===", action_id)
 
     _apply_head_tracking_if_present(ctx, action)
@@ -440,28 +445,36 @@ def apply_action(ctx, action: ActionDoc, rr_state: RoundRobinState) -> None:
         did_sound = False
 
         # --- Movement ---
+        move_name = None
         if "move" in step:
-            move_name = _resolve_name_or_picker(action_id, i, step["move"], rr_state)
-            if move_name:
-                repeat = int(step.get("repeat", 1))
-                logger.info("→ MOVE: '%s' x%d", move_name, repeat)
-                for _ in range(max(1, repeat)):
-                    mm.queue_move(DanceQueueMove(move_name))
-                did_move = True
+            all_moves = _flatten_picker_items(step["move"]["pick"]["items"], "name")
+            remaining_moves = [m for m, _ in all_moves if m not in used_moves]
+            if remaining_moves:
+                move_name = random.choice(remaining_moves)
+                used_moves.add(move_name)
             else:
-                logger.warning("!! Could not resolve move in step %d", i)
+                move_name = random.choice([m for m, _ in all_moves])  # fallback to any
+            repeat = int(step.get("repeat", 1))
+            logger.info("→ MOVE: '%s' x%d", move_name, repeat)
+            for _ in range(max(1, repeat)):
+                mm.queue_move(DanceQueueMove(move_name))
+            did_move = True
 
         # --- Sound ---
+        sound_name = None
         if "sound" in step:
-            snd = _resolve_file_or_picker(action_id, i, step["sound"], rr_state)
-            if snd:
-                logger.info("→ SOUND: '%s'%s", snd, f" (latency={latency:.2f}s)" if latency else "")
-                if latency:
-                    time.sleep(latency)
-                _play_sound(ctx, snd)
-                did_sound = True
+            all_sounds = _flatten_picker_items(step["sound"]["pick"]["items"], "file")
+            remaining_sounds = [s for s, _ in all_sounds if s not in used_sounds]
+            if remaining_sounds:
+                sound_name = random.choice(remaining_sounds)
+                used_sounds.add(sound_name)
             else:
-                logger.warning("!! Could not resolve sound in step %d", i)
+                sound_name = random.choice([s for s, _ in all_sounds])  # fallback
+            logger.info("→ SOUND: '%s'%s", sound_name, f" (latency={latency:.2f}s)" if latency else "")
+            if latency:
+                time.sleep(latency)
+            _play_sound(ctx, sound_name)
+            did_sound = True
 
         # --- Reactive Sound ---
         if "reactive_sound" in step:
@@ -480,11 +493,37 @@ def apply_action(ctx, action: ActionDoc, rr_state: RoundRobinState) -> None:
             logger.info("→ No movement or sound in step %d", i)
 
         # --- Wait for step duration ---
-        if duration > 0:
-            logger.info("⏳ Waiting %.2fs to complete step duration", duration)
-            time.sleep(duration)
-        else:
-            logger.info("⏭ No step duration specified; proceeding immediately")
+        if did_sound:
+            try:
+                from pydub import AudioSegment
+
+                if "sound" in step:
+                    snd_spec = _resolve_file_or_picker(action_id, i, step["sound"], rr_state)
+                    resolved_path, ok = resolve_sound_path(snd_spec)
+                    if ok and os.path.isfile(resolved_path):
+                        audio = AudioSegment.from_file(resolved_path)
+                        duration_sec = len(audio) / 1000.0
+                        logger.info("🎧 Waiting for sound duration: %.2f seconds", duration_sec)
+                        time.sleep(duration_sec)
+                    else:
+                        logger.info("🎧 Waiting fixed time (fallback): 2.0 seconds")
+                        time.sleep(2.0)
+            except Exception as e:
+                logger.warning("🎧 Could not determine sound duration: %s", e)
+                time.sleep(2.0)  # fallback wait
+
+
+        if did_move:
+            try:
+                # Estimate based on repeat count if needed
+                repeat = int(step.get("repeat", 1))
+                est_duration = 1.8 * repeat  # average Reachy dance move is ~1.8s
+                logger.info("🤖 Waiting %.2f seconds for movement", est_duration)
+                time.sleep(est_duration)
+            except Exception as e:
+                logger.warning("🤖 Movement wait fallback failed: %s", e)
+                time.sleep(2.0)
+
 
     logger.info("=== END ACTION: %s ===", action_id)
 
@@ -549,9 +588,10 @@ def cli(argv: Optional[List[str]] = None) -> int:
     _FUZZY_CUTOFF = float(getattr(app_args, "fuzzy_cutoff", 0.7))
 
     # 5) Load and validate actions
-    schema_path: Optional[Path] = None
-    if isinstance(app_args.schema, Path) and str(app_args.schema):
-        schema_path = app_args.schema
+    #$schema_path: Optional[Path] = None
+    #if isinstance(app_args.schema, Path) and str(app_args.schema):
+    #    schema_path = app_args.schema
+    schema_path = None
 
     actions = load_actions(app_args.actions_dir, schema_path)
 

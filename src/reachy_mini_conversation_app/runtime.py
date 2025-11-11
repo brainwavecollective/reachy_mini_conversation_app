@@ -1,9 +1,11 @@
 # src/reachy_mini_conversation_app/runtime.py
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Optional
 
 from reachy_mini import ReachyMini
+
 from .moves import MovementManager
 from .audio.head_wobbler import HeadWobbler
 from .utils import setup_logger, handle_vision_stuff
@@ -20,7 +22,9 @@ class AppContext:
 
 
 def start_runtime(args) -> AppContext:
-    """Create and start the same core services that main() uses, but for offline mode."""
+    """
+    Create and start the same core services that main() uses, for offline mode.
+    """
     logger = setup_logger(args.debug)
     logger.info("Starting offline actions runner")
 
@@ -54,7 +58,9 @@ def start_runtime(args) -> AppContext:
 
 
 def stop_runtime(ctx: AppContext) -> None:
-    """Stop services and disconnect, mirroring main.py teardown."""
+    """
+    Stop services and disconnect, mirroring main.py teardown.
+    """
     try:
         if ctx.vision_manager:
             ctx.vision_manager.stop()

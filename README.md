@@ -112,9 +112,13 @@ Lay of the land (theoretically... at least this is the plan):
 /actions/*.json
 
 
---- misc tbd to be revisited
-uv pip install jsonschema simpleaudio soundfile numpy
 
+source .venv/bin/activate
+
+uv pip install jsonschema pydub
+
+
+$ python bin/offline_actions.py --actions-dir actions --select random --pause-sec 7
 
 
 

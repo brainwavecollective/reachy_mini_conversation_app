@@ -2,11 +2,11 @@
 import json
 from pathlib import Path
 
-# Output to ../actions relative to this script
+# Output directory
 output_dir = Path(__file__).resolve().parent.parent / "actions"
 output_dir.mkdir(parents=True, exist_ok=True)
 
-# Category → Emotion → Movements and Sounds
+# Mapping: Category → Emotion → {moves, sounds}
 ACTION_MAP = {
     "dance-reachy-dance": {
         "joyful": {
@@ -88,15 +88,17 @@ ACTION_MAP = {
     }
 }
 
+
 def build_action(name: str, moves: list[str], sounds: list[str]) -> dict:
-    step = {
+    step_template = {
         "move": {"pick": {"items": moves}},
         "sound": {"pick": {"items": sounds}}
     }
     return {
         "name": name,
-        "steps": [step, step]
+        "steps": [step_template.copy(), step_template.copy()]
     }
+
 
 def main():
     for category, emotions in ACTION_MAP.items():
@@ -109,5 +111,7 @@ def main():
                 json.dump(action, f, indent=2)
             print(f"✅ Wrote: {output_path.relative_to(Path.cwd())}")
 
+
 if __name__ == "__main__":
     main()
+
