@@ -1,0 +1,43 @@
+{
+  "name": "surprise-surprise_confused",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "neck_recoil",
+            "side_peekaboo"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:confused1.wav",
+            "hf:oops1.wav",
+            "hf:uncertain1.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "neck_recoil",
+            "side_peekaboo"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:confused1.wav",
+            "hf:oops1.wav",
+            "hf:uncertain1.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

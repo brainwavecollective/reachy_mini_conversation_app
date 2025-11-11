@@ -1,0 +1,43 @@
+{
+  "name": "deep-in-thought_curious",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "head_tilt_roll",
+            "uh_huh_tilt"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:curious1.wav",
+            "hf:inquiring1.wav",
+            "hf:attentive1.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "head_tilt_roll",
+            "uh_huh_tilt"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:curious1.wav",
+            "hf:inquiring1.wav",
+            "hf:attentive1.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

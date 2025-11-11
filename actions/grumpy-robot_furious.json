@@ -1,0 +1,41 @@
+{
+  "name": "grumpy-robot_furious",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "grid_snap",
+            "chicken_peck"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:rage1.wav",
+            "hf:furious1.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "grid_snap",
+            "chicken_peck"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:rage1.wav",
+            "hf:furious1.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

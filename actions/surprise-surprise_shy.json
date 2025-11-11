@@ -1,0 +1,41 @@
+{
+  "name": "surprise-surprise_shy",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "side_glance_flick",
+            "side_peekaboo"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:shy1.wav",
+            "hf:welcoming1.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "side_glance_flick",
+            "side_peekaboo"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:shy1.wav",
+            "hf:welcoming1.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

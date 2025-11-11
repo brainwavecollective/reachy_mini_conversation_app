@@ -1,0 +1,41 @@
+{
+  "name": "grumpy-robot_irritated",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "chicken_peck",
+            "grid_snap"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:irritated1.wav",
+            "hf:irritated2.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "chicken_peck",
+            "grid_snap"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:irritated1.wav",
+            "hf:irritated2.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

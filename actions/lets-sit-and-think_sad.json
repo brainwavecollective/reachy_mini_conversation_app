@@ -1,0 +1,43 @@
+{
+  "name": "lets-sit-and-think_sad",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "simple_nod",
+            "side_to_side_sway"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:sad1.wav",
+            "hf:sad2.wav",
+            "hf:yes_sad1.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "simple_nod",
+            "side_to_side_sway"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:sad1.wav",
+            "hf:sad2.wav",
+            "hf:yes_sad1.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

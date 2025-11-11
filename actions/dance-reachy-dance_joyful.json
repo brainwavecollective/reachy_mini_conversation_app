@@ -1,0 +1,47 @@
+{
+  "name": "dance-reachy-dance_joyful",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "groovy_sway_and_roll",
+            "side_to_side_sway",
+            "headbanger_combo",
+            "interwoven_spirals"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:cheerful1.wav",
+            "hf:enthusiastic1.wav",
+            "hf:success2.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "groovy_sway_and_roll",
+            "side_to_side_sway",
+            "headbanger_combo",
+            "interwoven_spirals"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:cheerful1.wav",
+            "hf:enthusiastic1.wav",
+            "hf:success2.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

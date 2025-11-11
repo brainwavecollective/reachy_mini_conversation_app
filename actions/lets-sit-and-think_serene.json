@@ -1,0 +1,43 @@
+{
+  "name": "lets-sit-and-think_serene",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "side_to_side_sway",
+            "pendulum_swing"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:serenity1.wav",
+            "hf:calming1.wav",
+            "hf:relief1.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "side_to_side_sway",
+            "pendulum_swing"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:serenity1.wav",
+            "hf:calming1.wav",
+            "hf:relief1.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

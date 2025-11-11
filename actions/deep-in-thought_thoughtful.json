@@ -1,0 +1,41 @@
+{
+  "name": "deep-in-thought_thoughtful",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "head_tilt_roll",
+            "sharp_side_tilt"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:thoughtful1.wav",
+            "hf:thoughtful2.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "head_tilt_roll",
+            "sharp_side_tilt"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:thoughtful1.wav",
+            "hf:thoughtful2.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "name": "surprise-surprise_surprised",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "neck_recoil",
+            "sharp_side_tilt"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:surprised1.wav",
+            "hf:surprised2.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "neck_recoil",
+            "sharp_side_tilt"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:surprised1.wav",
+            "hf:surprised2.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

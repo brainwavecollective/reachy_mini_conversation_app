@@ -1,9 +1,0 @@
-{
-  "name": "chime_greet",
-  "head_tracking": { "enabled": true, "backend": "yolo" },
-  "steps": [
-    { "move": "yeah_nod", "duration": 1.8 },
-    { "sound": { "pick": { "items": ["hf:succss2.wav", "hf:success1.wav"] } }, "duration": 1.2 },
-    { "reactive_sound": "hf:helpful2.wav", "latency": 0.08, "duration": 3.5 }
-  ]
-}

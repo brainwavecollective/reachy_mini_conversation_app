@@ -1,0 +1,43 @@
+{
+  "name": "lets-sit-and-think_tired",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "pendulum_swing",
+            "simple_nod"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:tired1.wav",
+            "hf:sleep1.wav",
+            "hf:exhausted1.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "pendulum_swing",
+            "simple_nod"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:tired1.wav",
+            "hf:sleep1.wav",
+            "hf:exhausted1.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

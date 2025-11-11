@@ -1,0 +1,43 @@
+{
+  "name": "dance-reachy-dance_dance",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "groovy_sway_and_roll",
+            "headbanger_combo"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:dance1.wav",
+            "hf:dance2.wav",
+            "hf:dance3.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "groovy_sway_and_roll",
+            "headbanger_combo"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:dance1.wav",
+            "hf:dance2.wav",
+            "hf:dance3.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

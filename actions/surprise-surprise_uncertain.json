@@ -1,0 +1,41 @@
+{
+  "name": "surprise-surprise_uncertain",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "side_glance_flick",
+            "neck_recoil"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:uncertain1.wav",
+            "hf:lost1.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "side_glance_flick",
+            "neck_recoil"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:uncertain1.wav",
+            "hf:lost1.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

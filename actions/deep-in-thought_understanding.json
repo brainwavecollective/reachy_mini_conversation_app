@@ -1,0 +1,41 @@
+{
+  "name": "deep-in-thought_understanding",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "uh_huh_tilt",
+            "pendulum_swing"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:understanding1.wav",
+            "hf:understanding2.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "uh_huh_tilt",
+            "pendulum_swing"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:understanding1.wav",
+            "hf:understanding2.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

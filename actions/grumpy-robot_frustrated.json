@@ -1,0 +1,43 @@
+{
+  "name": "grumpy-robot_frustrated",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "stumble_and_recover",
+            "jackson_square"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:frustrated1.wav",
+            "hf:impatient1.wav",
+            "hf:impatient2.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "stumble_and_recover",
+            "jackson_square"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:frustrated1.wav",
+            "hf:impatient1.wav",
+            "hf:impatient2.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

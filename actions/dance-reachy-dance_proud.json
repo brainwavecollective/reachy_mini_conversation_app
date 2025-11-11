@@ -1,0 +1,43 @@
+{
+  "name": "dance-reachy-dance_proud",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "groovy_sway_and_roll",
+            "jackson_square"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:proud1.wav",
+            "hf:proud2.wav",
+            "hf:proud3.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "groovy_sway_and_roll",
+            "jackson_square"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:proud1.wav",
+            "hf:proud2.wav",
+            "hf:proud3.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

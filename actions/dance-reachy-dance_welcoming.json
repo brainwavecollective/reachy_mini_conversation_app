@@ -1,0 +1,41 @@
+{
+  "name": "dance-reachy-dance_welcoming",
+  "steps": [
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "groovy_sway_and_roll",
+            "side_to_side_sway"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:welcoming1.wav",
+            "hf:welcoming2.wav"
+          ]
+        }
+      }
+    },
+    {
+      "move": {
+        "pick": {
+          "items": [
+            "groovy_sway_and_roll",
+            "side_to_side_sway"
+          ]
+        }
+      },
+      "sound": {
+        "pick": {
+          "items": [
+            "hf:welcoming1.wav",
+            "hf:welcoming2.wav"
+          ]
+        }
+      }
+    }
+  ]
+}
