@@ -101,29 +101,6 @@ reachy-mini-conversation-app
 
 By default, the app runs in console mode for direct audio interaction. Use the `--gradio` flag to launch a web UI served locally at http://127.0.0.1:7860/ (required when running in simulation mode). With a camera attached, vision is handled by the gpt-realtime model when the camera tool is used. For local vision processing, use the `--local-vision` flag to process frames periodically using the SmolVLM2 model. Additionally, you can enable face tracking via YOLO or MediaPipe pipelines depending on the extras you installed.
 
-## Running an offline demo loop 
-WIP and if you're reading this you're drinking from the firehose.  
-Goal is to be able to run an offline demo loop that doesn't need the internet and can be run on a low power device (e.g. CPU on a laptop).  
-The intention is for this to be very simple to setup/interact with but there is theoretically a good bit of customization available.  
-
-Lay of the land (theoretically... at least this is the plan): 
-/bin/action_schema.json - expectations for actions structure
-/bin/offline_actions.py - standalone for now (ideally integrate as a flag)
-/actions/*.json
-
-
-
-source .venv/bin/activate
-
-uv pip install jsonschema pydub
-
-sudo apt install ffmpeg
-
-
-$ python bin/offline_actions.py --actions-dir actions --select random --pause-sec 7
-
-
-
 ### CLI options
 
 | Option | Default | Description |
@@ -152,6 +129,45 @@ $ python bin/offline_actions.py --actions-dir actions --select random --pause-se
   ```bash
   reachy-mini-conversation-app --no-camera
   ```
+
+## Running the offline demo  
+WIP and if you're reading this you're drinking from the firehose.  
+
+### SETUP & RUN THE DEMO  
+```
+sudo apt install ffmpeg
+source .venv/bin/activate
+uv pip install jsonschema pydub
+uv run python bin/offline_actions.py --actions-dir actions --select random --pause-sec 30
+```
+### Background and more info
+Goal is to be able to run an offline demo loop that doesn't need the internet and can be run on a low power device (e.g. CPU on a laptop), to give Reachy Mini some motion during a public demo. The intention is for this to be very simple to setup/interact with but there is a good bit of customization available.  Over time I'd like to expand what can be showcased, be more intentional about aligning sounds & motions, and incorporate this into the conversation app (would love to have something like an `--offline-demo` flag)... but for now this is a super hacked together something just to "get it working" reliably.
+
+```
+# Lay of the land
+.
+├─ bin/
+│  ├─ action_schema.json                # Defines action structure
+│  ├─ offline_actions.py                # Standalone main script to run the loop
+│  └─ generate_reachy_mini_actions.py   # Organizes sounds & movements; generates /actions/*.json
+├─ actions/
+│  └─ *.json                            # USER-DEFINED movements and sounds 
+└─ src/reachy_mini_conversation_app/
+   └─ runtime.py                        # Offloading to keep main clean
+```
+
+Ideas for expansion include other behaviors to showcase realtime voice & conversation, playing library emotions, dancing to music, head tracking, etc.. As-is you can be more specific about what sounds/motions play together, but for now it's fairly random and good for a "set it and forget it" conference setting. Choreography can be structured through the json files. User has control over what happens when and whether or not there is randomness.
+
+**TL;DR: This could be a foundation for designing workflows, but for now it's just a bunch of random sounds and motions strung together in an infinite loop.** 
+
+### How actions are defined 
+
+**At present:**  
+There are 5 categories of behavior. Each behavior has a number of potential movements associated with it. Each movement has a number of potential sounds. Selection of both movements and sounds are random and will vary with each run. However, this is easily changed by modifying the content of the json action files.... 
+
+**Understanding customization options:**  
+Each **action** is made up of a series of **steps**. Actions can have one or more steps. Each step can have various activities associated with it, such as a **sound** and/or a **movement**. Users can explicitly define which sound/movement should be played, or, allow the picker to choose randomly. Steps can mix and match these capabilities. Since all of these steps are grouped together in a single action file, an explicitly defined series of steps can be created which will run in isolation.
+
 
 ## LLM tools exposed to the assistant
 
