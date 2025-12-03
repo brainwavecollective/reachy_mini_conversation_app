@@ -16,18 +16,15 @@ dependencies = [
     "gradio>=5.49.0",
     "huggingface_hub>=0.34.4",
     "opencv-python>=4.12.0.88",
-
     #Environment variables
     "python-dotenv",
-
     #OpenAI
     "openai>=2.1",
-
     #Reachy mini
     "reachy_mini_dances_library",
     "reachy_mini_toolbox",
     "reachy_mini @ git+https://github.com/brainwavecollective/reachy_mini@v1.1.2-linux",
-
+    "opencv-python-headless>=4.12.0.88",
 ]
 
 [project.optional-dependencies]
