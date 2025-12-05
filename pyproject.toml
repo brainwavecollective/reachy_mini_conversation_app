@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     #Media
     "aiortc>=1.13.0",
-    "fastrtc>=0.0.33",
+    "fastrtc>=0.0.34",
     "gradio>=5.49.0",
     "huggingface_hub>=0.34.4",
     "opencv-python>=4.12.0.88",
@@ -26,12 +26,13 @@ dependencies = [
     #Reachy mini
     "reachy_mini_dances_library",
     "reachy_mini_toolbox",
-    "reachy_mini>=1.0.0.rc4",
+    "reachy_mini>=1.1.2",
 ]
 
 [project.optional-dependencies]
 reachy_mini_wireless = [
-  "reachy_mini[gstreamer,wireless-version]",
+  "PyGObject>=3.42.2,<=3.46.0", 
+  "gst-signalling>=1.1.2",
 ]
 local_vision = ["torch", "transformers", "num2words"]
 yolo_vision = ["ultralytics", "supervision"]
