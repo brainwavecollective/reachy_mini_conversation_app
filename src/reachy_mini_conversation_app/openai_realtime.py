@@ -8,6 +8,7 @@ from pathlib import Path
 from datetime import datetime
 
 import cv2
+import httpx
 import numpy as np
 import gradio as gr
 from openai import AsyncOpenAI
@@ -68,6 +69,10 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         self.partial_transcript_task: asyncio.Task[None] | None = None
         self.partial_transcript_sequence: int = 0  # sequence counter to prevent stale emissions
         self.partial_debounce_delay = 0.5  # seconds
+
+        # VIBE Eyes integration
+        self.vibe_queue: asyncio.Queue[str] = asyncio.Queue(maxsize=3)
+        self.vibe_worker_task: asyncio.Task[None] | None = None
 
         # Internal lifecycle flags
         self._shutdown_requested: bool = False
@@ -146,6 +151,41 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
             logger.debug("Debounced partial cancelled")
             raise
 
+    async def _vibe_worker_loop(self) -> None:
+        """POST assistant transcripts to VIBE engine."""
+        async with httpx.AsyncClient() as client:
+            consecutive_failures = 0
+
+            while not self._shutdown_requested:
+                try:
+                    text = await self.vibe_queue.get()
+
+                    response = await client.post(
+                        "http://localhost:8001/transcript",
+                        json={"text": text},
+                        timeout=10.0,
+                    )
+
+                    if response.status_code != 200:
+                        consecutive_failures += 1
+                        logger.warning(
+                            "VIBE returned non-200 (%s): %s",
+                            response.status_code,
+                            response.text[:200],
+                        )
+                    else:
+                        consecutive_failures = 0
+
+                except asyncio.CancelledError:
+                    break
+
+                except Exception as e:
+                    consecutive_failures += 1
+                    logger.warning("VIBE update failed (continuing): %s", e)
+
+                    if consecutive_failures >= 5:
+                        logger.error("VIBE appears down (5 consecutive failures)")
+
     async def start_up(self) -> None:
         """Start the handler with minimal retries on unexpected websocket closure."""
         openai_api_key = config.OPENAI_API_KEY
@@ -169,6 +209,22 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 openai_api_key = "DUMMY"
 
         self.client = AsyncOpenAI(api_key=openai_api_key)
+        
+        # VIBE health check - fail hard if not reachable
+        try:
+            async with httpx.AsyncClient() as client:
+                logger.info("Checking VIBE Eyes endpoint health...")
+                response = await client.get('http://localhost:8001/status', timeout=3.0)
+                response.raise_for_status()
+                logger.info("✓ VIBE Eyes endpoint is healthy")
+        except Exception as e:
+            logger.error(f"✗ VIBE Eyes endpoint unreachable: {e}")
+            logger.error("VIBE Eyes must be running. Start it with: cd vibe-eyes && python -m vibe_eyes.server")
+            raise RuntimeError(f"VIBE Eyes endpoint not available: {e}")
+        
+        # Start VIBE worker
+        self.vibe_worker_task = asyncio.create_task(self._vibe_worker_loop())
+        logger.info("VIBE worker started")
 
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
@@ -345,10 +401,18 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
                     await self.output_queue.put(AdditionalOutputs({"role": "user", "content": event.transcript}))
 
-                # Handle assistant transcription
+                # Handle assistant transcription - only send completed transcripts to VIBE
                 if event.type in ("response.audio_transcript.done", "response.output_audio_transcript.done"):
                     logger.debug(f"Assistant transcript: {event.transcript}")
                     await self.output_queue.put(AdditionalOutputs({"role": "assistant", "content": event.transcript}))
+                    
+                    # Send completed transcript to VIBE (drop oldest if queue full)
+                    try:
+                        self.vibe_queue.put_nowait(event.transcript)
+                    except asyncio.QueueFull:
+                        self.vibe_queue.get_nowait()  # Drop oldest
+                        self.vibe_queue.put_nowait(event.transcript)
+                        logger.debug(f"VIBE queue full, dropped oldest transcript")
 
                 # Handle audio delta
                 if event.type in ("response.audio.delta", "response.output_audio.delta"):
@@ -530,6 +594,15 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
     async def shutdown(self) -> None:
         """Shutdown the handler."""
         self._shutdown_requested = True
+        
+        # Cancel VIBE worker
+        if self.vibe_worker_task and not self.vibe_worker_task.done():
+            self.vibe_worker_task.cancel()
+            try:
+                await self.vibe_worker_task
+            except asyncio.CancelledError:
+                pass
+        
         # Cancel any pending debounce task
         if self.partial_transcript_task and not self.partial_transcript_task.done():
             self.partial_transcript_task.cancel()
