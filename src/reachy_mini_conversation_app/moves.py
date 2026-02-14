@@ -51,6 +51,9 @@ from reachy_mini.utils.interpolation import (
     linear_pose_interpolation,
 )
 
+import math
+from reachy_mini_conversation_app.affect_bias import AffectBias
+
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +72,7 @@ class BreathingMove(Move):  # type: ignore
         interpolation_start_pose: NDArray[np.float32],
         interpolation_start_antennas: Tuple[float, float],
         interpolation_duration: float = 1.0,
+        antenna_params_provider: Optional[Callable[[], tuple[float, float]]] = None,
     ):
         """Initialize breathing move.
 
@@ -78,6 +82,12 @@ class BreathingMove(Move):  # type: ignore
             interpolation_duration: Duration of interpolation to neutral (seconds)
 
         """
+
+        self._antenna_params_provider = antenna_params_provider
+
+        self._antenna_amp_rad_default = np.deg2rad(15.0)
+        self._antenna_freq_hz_default = 0.5
+
         self.interpolation_start_pose = interpolation_start_pose
         self.interpolation_start_antennas = np.array(interpolation_start_antennas)
         self.interpolation_duration = interpolation_duration
@@ -122,8 +132,16 @@ class BreathingMove(Move):  # type: ignore
             z_offset = self.breathing_z_amplitude * np.sin(2 * np.pi * self.breathing_frequency * breathing_time)
             head_pose = create_head_pose(x=0, y=0, z=z_offset, roll=0, pitch=0, yaw=0, degrees=True, mm=False)
 
-            # Antenna sway (opposite directions)
-            antenna_sway = self.antenna_sway_amplitude * np.sin(2 * np.pi * self.antenna_frequency * breathing_time)
+            # Antenna sway (opposite directions), params pulled live
+            if self._antenna_params_provider is not None:
+                amp_deg, freq_hz = self._antenna_params_provider()
+                amp = np.deg2rad(float(amp_deg))
+                freq = float(freq_hz)
+            else:
+                amp = self._antenna_amp_rad_default
+                freq = self._antenna_freq_hz_default
+
+            antenna_sway = amp * np.sin(2 * np.pi * freq * breathing_time)
             antennas = np.array([antenna_sway, -antenna_sway], dtype=np.float64)
 
         # Return in official Move interface format: (head_pose, antennas_array, body_yaw)
@@ -312,6 +330,9 @@ class MovementManager:
         self._status_lock = threading.Lock()
         self._freq_stats = LoopFrequencyStats()
         self._freq_snapshot = LoopFrequencyStats()
+
+        self._affect_bias = AffectBias()
+
 
     def queue_move(self, move: Move) -> None:
         """Queue a primary move to run after the currently executing one.
@@ -512,7 +533,9 @@ class MovementManager:
                         interpolation_start_pose=current_head_pose,
                         interpolation_start_antennas=current_antennas,
                         interpolation_duration=1.0,
+                        antenna_params_provider=self._affect_bias.get_breathing_params,
                     )
+
                     self.move_queue.append(breathing_move)
                     logger.debug("Started breathing after %.1fs of inactivity", idle_for)
                 except Exception as e:
@@ -589,7 +612,55 @@ class MovementManager:
         """Compose primary and secondary poses into a single command pose."""
         primary = self._get_primary_pose(current_time)
         secondary = self._get_secondary_pose()
+
+        # Extract current posture from primary head pose
+        head_matrix, antennas, body_yaw = primary
+
+        # Decompose head pose
+        x = head_matrix[0, 3]
+        y = head_matrix[1, 3]
+        z = head_matrix[2, 3]
+
+        # Extract rotation (ZYX Euler)
+        yaw = math.atan2(head_matrix[1, 0], head_matrix[0, 0])
+        pitch = math.asin(-head_matrix[2, 0])
+        roll = math.atan2(head_matrix[2, 1], head_matrix[2, 2])
+
+        current_vec = (x, y, z, roll, pitch, yaw)
+
+        # Compute affect bias
+        affect_bias = self._affect_bias.compute_bias(current_vec)
+
+        # Add affect bias into secondary offsets
+        secondary_head, sec_antennas, sec_body_yaw = secondary
+
+        affect_head_pose = create_head_pose(
+            x=affect_bias[0],
+            y=affect_bias[1],
+            z=affect_bias[2],
+            roll=affect_bias[3],
+            pitch=affect_bias[4],
+            yaw=affect_bias[5],
+            degrees=False,
+            mm=False,
+        )
+
+        secondary = (
+            affect_head_pose,
+            sec_antennas,
+            sec_body_yaw,
+        )
+
         return combine_full_body(primary, secondary)
+
+    def set_affect_attractor(
+        self,
+        target: Tuple[float, float, float, float, float, float],
+        strength: float,
+    ) -> None:
+        self._affect_bias.set_attractor(target, strength)
+
+
 
     def _update_primary_motion(self, current_time: float) -> None:
         """Advance queue state and idle behaviours for this tick."""

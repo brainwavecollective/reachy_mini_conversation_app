@@ -97,6 +97,8 @@ def main() -> None:
 
     # Each async service → its own thread/loop
     movement_manager.start()
+
+
     head_wobbler.start()
     if camera_worker:
         camera_worker.start()
