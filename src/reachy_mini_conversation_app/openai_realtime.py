@@ -17,6 +17,7 @@ from scipy.signal import resample
 from websockets.exceptions import ConnectionClosedError
 
 from affect_engine import AffectEngine, AffectConfig
+from reachy_mini_conversation_app.embodiment.eyes import EyesAdapter
 
 from reachy_mini_conversation_app.config import config
 from reachy_mini_conversation_app.prompts import get_session_voice, get_session_instructions
@@ -99,6 +100,11 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
         # Start AffectEngine
         await self.affect_engine.start()
+        
+        # Wire up eyes
+        self.eyes_adapter = EyesAdapter()
+        await self.eyes_adapter.connect()
+        self.affect_engine.subscribe(self.eyes_adapter.update)
 
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
@@ -337,6 +343,11 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 self.output_queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
+	
+	# Stop Eyes
+        if hasattr(self, "eyes_adapter"):
+            await self.eyes_adapter.close()
+
 
     # --------------------------------------------------
     # UTILS

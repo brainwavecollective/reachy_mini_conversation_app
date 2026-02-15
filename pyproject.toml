@@ -33,6 +33,8 @@ dependencies = [
     #Emotional Affect Engine
     "affect-engine @ git+ssh://git@github.com/brainwavecollective/affect-engine.git",
 
+    #LED Eyes 
+    "reachy-eyes @ git+https://github.com/brainwavecollective/reachy-eyes.git",
 
 ]
 
