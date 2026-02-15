@@ -26,6 +26,7 @@ from reachy_mini_conversation_app.tools.core_tools import (
     dispatch_tool_call,
 )
 
+
 logger = logging.getLogger(__name__)
 
 OPEN_AI_INPUT_SAMPLE_RATE: Final[Literal[24000]] = 24000
@@ -39,6 +40,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         self,
         deps: ToolDependencies,
         gradio_mode: bool = False,
+        debug: bool = False,
         instance_path: Optional[str] = None,
     ):
         super().__init__(
@@ -64,12 +66,20 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
         self._shutdown_requested = False
         self._connected_event = asyncio.Event()
+        
+        self.debug = debug
 
         # -------------------------------
         # Affect Engine (internal only)
         # -------------------------------
-        affect_config = AffectConfig(debug=False)
+
+        affect_config = AffectConfig(
+            nrc_lexicon_path=config.AFFECT_ENGINE_DATA_PATH,
+            debug=debug,
+        )
+
         self.affect_engine = AffectEngine(affect_config)
+
 
     def copy(self) -> "OpenaiRealtimeHandler":
         return OpenaiRealtimeHandler(self.deps, self.gradio_mode, self.instance_path)
@@ -149,6 +159,19 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
             async for event in self.connection:
 
                 # ---------------------------------------
+                # LISTENING STATE
+                # ---------------------------------------
+
+                if event.type == "input_audio_buffer.speech_started":
+                    if self.deps.head_wobbler:
+                        self.deps.head_wobbler.reset()
+                        self.deps.movement_manager.set_listening(True)
+
+                if event.type == "input_audio_buffer.speech_stopped":
+                    self.deps.movement_manager.set_listening(False)
+
+
+                # ---------------------------------------
                 # USER TRANSCRIPTS (DO NOT FEED ENGINE)
                 # ---------------------------------------
 
@@ -176,24 +199,31 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                     )
 
                     # Feed assistant speech into AffectEngine
-                    await self.affect_engine.process_text(transcript)
+                    asyncio.create_task(self._feed_affect(transcript))
+
 
                 # ---------------------------------------
                 # AUDIO DELTA
                 # ---------------------------------------
 
                 if event.type in ("response.audio.delta", "response.output_audio.delta"):
+
+                    # Feed audio into head wobble (speech motion)
+                    if self.deps.head_wobbler:
+                        self.deps.head_wobbler.feed(event.delta)
+
                     self.last_activity_time = asyncio.get_event_loop().time()
 
                     await self.output_queue.put(
                         (
                             self.output_sample_rate,
                             np.frombuffer(
-                                base64.b64decode(event.delta),
-                                dtype=np.int16,
+                            base64.b64decode(event.delta),
+                            dtype=np.int16,
                             ).reshape(1, -1),
                         )
                     )
+
 
                 # ---------------------------------------
                 # TOOL CALLS
@@ -237,6 +267,15 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
                 if event.type == "error":
                     logger.error("Realtime error: %s", event)
+
+    async def _feed_affect(self, transcript: str) -> None:
+        try:
+            logger.debug("AFFECT <- assistant: %s", transcript)
+            result = await self.affect_engine.process_text(transcript)
+            logger.debug("AFFECT -> vibe: %s", result.get("vibe"))
+        except Exception as e:
+            logger.exception("AffectEngine failed: %s", e)
+
 
     # --------------------------------------------------
     # AUDIO INPUT

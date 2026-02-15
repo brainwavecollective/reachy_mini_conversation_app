@@ -126,7 +126,13 @@ def run(
     )
     logger.debug(f"Chatbot avatar images: {chatbot.avatar_images}")
 
-    handler = OpenaiRealtimeHandler(deps, gradio_mode=args.gradio, instance_path=instance_path)
+    handler = OpenaiRealtimeHandler(
+        deps,
+        gradio_mode=args.gradio,
+        instance_path=instance_path,
+        debug=args.debug,
+    )
+
 
     stream_manager: gr.Blocks | LocalStream | None = None
 

@@ -34,6 +34,8 @@ if dotenv_path:
 else:
     logger.warning("No .env file found, using environment variables")
 
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+
 
 class Config:
     """Configuration class for the conversation app."""
@@ -51,6 +53,24 @@ class Config:
 
     REACHY_MINI_CUSTOM_PROFILE = LOCKED_PROFILE or os.getenv("REACHY_MINI_CUSTOM_PROFILE")
     logger.debug(f"Custom Profile: {REACHY_MINI_CUSTOM_PROFILE}")
+
+
+    # ----------------------------------------
+    # Affect Engine configuration
+    # ----------------------------------------
+
+    # Default: project_root/data/NRC-VAD-Lexicon-v2.1/NRC-VAD-Lexicon-v2.1.txt
+    _DEFAULT_AFFECT_DATA_PATH = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "NRC-VAD-Lexicon-v2.1"
+        / "NRC-VAD-Lexicon-v2.1.txt"
+    )
+
+    AFFECT_ENGINE_DATA_PATH: str = os.getenv(
+        "AFFECT_ENGINE_DATA_PATH",
+        str(_DEFAULT_AFFECT_DATA_PATH),
+    )
 
 
 config = Config()
