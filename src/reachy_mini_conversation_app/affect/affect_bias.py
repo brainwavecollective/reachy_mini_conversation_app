@@ -1,15 +1,24 @@
 """
 AffectBias
 
-Transforms VADCC into motion bias using AffectManifold.
-Pure runtime signal — no file polling.
+Transforms VADCC into continuous motion bias using AffectManifold.
+
+This version is fully responsive:
+- No event system
+- No attack/release envelope
+- No lingering emotional memory
+- No baseline folding
+
+The affect engine owns temporal smoothing.
+This class simply produces a continuously updated motion attractor.
 """
 
-import time
 from typing import Tuple
+import logging
 
 from reachy_mini_conversation_app.affect.affect_manifold import AffectManifold
 
+logger = logging.getLogger(__name__)
 
 Vec6 = Tuple[float, float, float, float, float, float]
 Vec5 = Tuple[float, float, float, float, float]
@@ -17,10 +26,14 @@ Vec5 = Tuple[float, float, float, float, float]
 
 class AffectBias:
     """
-    Converts VADCC into continuous motion bias.
+    Continuous emotional bias field.
 
-    - update_vadcc() sets new emotional target.
-    - compute_bias() is called inside 100Hz loop.
+    The affect engine provides a streaming VADCC trajectory.
+    This class converts that trajectory into a motion attractor.
+
+    bias = strength * axis_weight * (target - current)
+
+    Strength is derived directly from the manifold blend.
     """
 
     def __init__(self) -> None:
@@ -28,34 +41,28 @@ class AffectBias:
 
         self._vadcc: Vec5 = (0.5, 0.5, 0.5, 0.5, 0.5)
 
+        # Current manifold outputs
         self._target: Vec6 = (0, 0, 0, 0, 0, 0)
-        self._strength = 0.0
-        self._envelope = 0.0
-        self._last_time = time.monotonic()
+        self._strength: float = 0.0
+        self._axis_weights: Vec6 = (1, 1, 1, 1, 1, 1)
 
-        self._base_gain = 0.6
-        self._attack_time = 1.5
-        self._release_time = 3.0
-        self._axis_weights = (1, 1, 1, 1, 1, 1)
-
-        self._antenna_amp_deg = 15.0
-        self._antenna_freq_hz = 0.5
+        # Breathing parameters
+        self._antenna_amp_deg: float = 0.0
+        self._antenna_freq_hz: float = 0.0
 
     # -----------------------------------------------------
-    # External Update (from MovementAdapter)
+    # External Update (called by MovementManager)
     # -----------------------------------------------------
 
     def update_vadcc(self, vadcc: Vec5) -> None:
         """
-        Receive live VADCC from AffectEngine.
-        Computes new motion manifold target.
+        Update internal manifold state from live VADCC stream.
         """
         self._vadcc = tuple(float(v) for v in vadcc)
 
         motion = self._manifold.compute_motion(self._vadcc)
 
         t = motion["target"]
-
         self._target = (
             float(t["x"]),
             float(t["y"]),
@@ -65,28 +72,29 @@ class AffectBias:
             float(t["yaw"]),
         )
 
+        # Strength now comes directly from manifold (RBF dominance)
+        self._strength = float(motion["strength"])
+
+        # Axis weights shape influence per DOF
+        self._axis_weights = tuple(float(a) for a in motion["axis_weights"])
+
+        # Breathing parameters (max values defined in anchors)
         b = motion["breathing"]
         self._antenna_amp_deg = float(b["antenna_amplitude_deg"])
         self._antenna_freq_hz = float(b["antenna_frequency_hz"])
 
-        self._strength = float(motion["strength"])
-        self._base_gain = float(motion["base_gain"])
-        self._attack_time = float(motion["attack_time"])
-        self._release_time = float(motion["release_time"])
-        self._axis_weights = tuple(float(a) for a in motion["axis_weights"])
-
     # -----------------------------------------------------
-    # Bias Computation (100Hz loop calls this)
+    # Bias Computation (called at 100Hz)
     # -----------------------------------------------------
 
     def compute_bias(self, current: Vec6) -> Vec6:
-        now = time.monotonic()
-        dt = now - self._last_time
-        self._last_time = now
+        """
+        Compute continuous motion bias.
 
-        self._update_envelope(dt)
+        current: (x, y, z, roll, pitch, yaw)
+        """
 
-        k = self._base_gain * self._strength * self._envelope
+        k = self._strength
 
         if k <= 1e-6:
             return (0, 0, 0, 0, 0, 0)
@@ -100,20 +108,12 @@ class AffectBias:
         return tuple(bias)
 
     # -----------------------------------------------------
-    # Envelope Dynamics
-    # -----------------------------------------------------
-
-    def _update_envelope(self, dt: float) -> None:
-        if self._strength > 0:
-            rate = dt / max(self._attack_time, 1e-6)
-            self._envelope = min(1.0, self._envelope + rate)
-        else:
-            rate = dt / max(self._release_time, 1e-6)
-            self._envelope = max(0.0, self._envelope - rate)
-
-    # -----------------------------------------------------
-    # Breathing Access (used by MovementManager)
+    # Breathing Access
     # -----------------------------------------------------
 
     def get_breathing_params(self) -> tuple[float, float]:
+        """
+        Returns (antenna_amplitude_deg, antenna_frequency_hz)
+        """
         return self._antenna_amp_deg, self._antenna_freq_hz
+

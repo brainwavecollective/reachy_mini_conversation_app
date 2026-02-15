@@ -20,8 +20,10 @@ class AffectManifold:
 
     def compute_motion(self, vadcc: Vec5) -> Dict:
         weights = self._compute_weights(vadcc)
+        peak_weight = max(weights)
 
         blended = self._blend_motion(weights)
+        blended["strength"] = peak_weight
 
         return blended
 
@@ -70,7 +72,6 @@ class AffectManifold:
                 "antenna_frequency_hz": 0.0
             },
             "strength": 0.0,
-            "base_gain": 0.0,
             "attack_time": 0.0,
             "release_time": 0.0,
             "axis_weights": [0.0]*6
@@ -84,7 +85,6 @@ class AffectManifold:
             result["breathing"][k] += motion["breathing"][k] * weight
 
         result["strength"] += motion["strength"] * weight
-        result["base_gain"] += motion["base_gain"] * weight
         result["attack_time"] += motion["attack_time"] * weight
         result["release_time"] += motion["release_time"] * weight
 
@@ -190,9 +190,8 @@ class AffectManifold:
                     "antenna_frequency_hz": freq
                 },
                 "strength": strength,
-                "base_gain": 0.6,
-                "attack_time": 1.5,
-                "release_time": 3.0,
+                "attack_time": 0.2,
+                "release_time": 0.6,
                 "axis_weights": [1,1,1,0.6,1,1]
             }
         }

@@ -5,7 +5,7 @@ Bridges AffectEngine VIBE output to MovementManager.
 """
 
 from typing import Sequence
-from reachy_mini_conversation_app.moves.movement_manager import MovementManager
+from reachy_mini_conversation_app.moves import MovementManager
 
 
 class MovementAdapter:

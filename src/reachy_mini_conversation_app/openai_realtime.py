@@ -18,6 +18,7 @@ from websockets.exceptions import ConnectionClosedError
 
 from affect_engine import AffectEngine, AffectConfig
 from reachy_mini_conversation_app.embodiment.eyes import EyesAdapter
+from reachy_mini_conversation_app.embodiment.movement import MovementAdapter
 
 from reachy_mini_conversation_app.config import config
 from reachy_mini_conversation_app.prompts import get_session_voice, get_session_instructions

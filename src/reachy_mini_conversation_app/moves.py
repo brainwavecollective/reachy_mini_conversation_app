@@ -36,7 +36,7 @@ import time
 import logging
 import threading
 from queue import Empty, Queue
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Optional, Callable
 from collections import deque
 from dataclasses import dataclass
 
@@ -70,6 +70,7 @@ class BreathingMove(Move):  # type: ignore
         interpolation_start_pose: NDArray[np.float32],
         interpolation_start_antennas: Tuple[float, float],
         interpolation_duration: float = 1.0,
+        antenna_params_provider: Optional[Callable[[], tuple[float, float]]] = None,
     ):
         """Initialize breathing move.
 
@@ -90,8 +91,11 @@ class BreathingMove(Move):  # type: ignore
         # Breathing parameters
         self.breathing_z_amplitude = 0.005  # 5mm gentle breathing
         self.breathing_frequency = 0.1  # Hz (6 breaths per minute)
-        self.antenna_sway_amplitude = np.deg2rad(15)  # 15 degrees
-        self.antenna_frequency = 0.5  # Hz (faster antenna sway)
+        
+        # Anteanna parameters 
+        self._antenna_params_provider = antenna_params_provider
+        self._antenna_amp_rad_default = np.deg2rad(15.0)
+        self._antenna_freq_hz_default = 0.5
 
     @property
     def duration(self) -> float:
@@ -124,8 +128,17 @@ class BreathingMove(Move):  # type: ignore
             head_pose = create_head_pose(x=0, y=0, z=z_offset, roll=0, pitch=0, yaw=0, degrees=True, mm=False)
 
             # Antenna sway (opposite directions)
-            antenna_sway = self.antenna_sway_amplitude * np.sin(2 * np.pi * self.antenna_frequency * breathing_time)
+            if self._antenna_params_provider is not None:
+                amp_deg, freq_hz = self._antenna_params_provider()
+                amp = np.deg2rad(float(amp_deg))
+                freq = float(freq_hz)
+            else:
+                amp = self._antenna_amp_rad_default
+                freq = self._antenna_freq_hz_default
+
+            antenna_sway = amp * np.sin(2 * np.pi * freq * breathing_time)
             antennas = np.array([antenna_sway, -antenna_sway], dtype=np.float64)
+
 
         # Return in official Move interface format: (head_pose, antennas_array, body_yaw)
         return (head_pose, antennas, 0.0)
@@ -283,27 +296,34 @@ class MovementManager:
         self._set_target_err_interval = 1.0  # seconds between error logs
         self._set_target_err_suppressed = 0
 
+        # Layer switches (hard on/off)
+        self._primary_moves_enabled = False
+        self._breathing_enabled = True
+        self._speech_offsets_enabled = False
+        self._face_tracking_enabled = True
+        self._affect_enabled = True
+
         # Cross-thread signalling
         self._command_queue: "Queue[Tuple[str, Any]]" = Queue()
         self._speech_offsets_lock = threading.Lock()
         self._pending_speech_offsets: Tuple[float, float, float, float, float, float] = (
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
         )
         self._speech_offsets_dirty = False
 
         self._face_offsets_lock = threading.Lock()
         self._pending_face_offsets: Tuple[float, float, float, float, float, float] = (
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
         )
         self._face_offsets_dirty = False
 
@@ -316,6 +336,30 @@ class MovementManager:
 
         # Emotional bias integration
         self._affect_bias = AffectBias()
+
+
+    def set_primary_moves_enabled(self, enabled: bool) -> None:
+        """Include/exclude non-breathing primary moves (emotions, dances, goto, etc.)."""
+        self._command_queue.put(("set_primary_enabled", bool(enabled)))
+
+    def set_breathing_enabled(self, enabled: bool) -> None:
+        """Include/exclude idle breathing (BreathingMove)."""
+        self._command_queue.put(("set_breathing_enabled", bool(enabled)))
+
+    def set_speech_offsets_enabled(self, enabled: bool) -> None:
+        """Include/exclude speech sway offsets in the final pose."""
+        self._command_queue.put(("set_speech_enabled", bool(enabled)))
+
+    def set_face_tracking_enabled(self, enabled: bool) -> None:
+        """Include/exclude face tracking offsets in the final pose."""
+        self._command_queue.put(("set_face_enabled", bool(enabled)))
+
+    def set_affect_enabled(self, enabled: bool) -> None:
+        """Include/exclude affect bias offsets in the final pose."""
+        self._command_queue.put(("set_affect_enabled", bool(enabled)))
+
+
+
 
     def queue_move(self, move: Move) -> None:
         """Queue a primary move to run after the currently executing one.
@@ -434,12 +478,14 @@ class MovementManager:
                 )
             else:
                 logger.warning("Ignored queue_move command with invalid payload: %s", payload)
+
         elif command == "clear_queue":
             self.move_queue.clear()
             self.state.current_move = None
             self.state.move_start_time = None
             self._breathing_active = False
             logger.info("Cleared move queue and stopped current move")
+
         elif command == "set_moving_state":
             try:
                 duration = float(payload)
@@ -447,13 +493,53 @@ class MovementManager:
                 logger.warning("Invalid moving state duration: %s", payload)
                 return
             self.state.update_activity()
+
         elif command == "mark_activity":
             self.state.update_activity()
+
+        elif command == "set_primary_enabled":
+            self._primary_moves_enabled = bool(payload)
+            if not self._primary_moves_enabled:
+                if self.state.current_move is not None and not isinstance(self.state.current_move, BreathingMove):
+                    self.state.current_move = None
+                    self.state.move_start_time = None
+                if self.move_queue:
+                    self.move_queue = deque(
+                        [m for m in self.move_queue if isinstance(m, BreathingMove)]
+                    )
+            self.state.update_activity()
+
+        elif command == "set_breathing_enabled":
+            self._breathing_enabled = bool(payload)
+            if not self._breathing_enabled:
+                if isinstance(self.state.current_move, BreathingMove):
+                    self.state.current_move = None
+                    self.state.move_start_time = None
+                if self.move_queue:
+                    self.move_queue = deque(
+                        [m for m in self.move_queue if not isinstance(m, BreathingMove)]
+                    )
+                self._breathing_active = False
+            self.state.update_activity()
+
+        elif command == "set_speech_enabled":
+            self._speech_offsets_enabled = bool(payload)
+            self.state.update_activity()
+
+        elif command == "set_face_enabled":
+            self._face_tracking_enabled = bool(payload)
+            self.state.update_activity()
+
+        elif command == "set_affect_enabled":
+            self._affect_enabled = bool(payload)
+            self.state.update_activity()
+
         elif command == "set_listening":
             desired_state = bool(payload)
             now = self._now()
             if now - self._last_listening_toggle_time < self._listening_debounce_s:
                 return
+
             self._last_listening_toggle_time = now
 
             if self._is_listening == desired_state:
@@ -461,17 +547,18 @@ class MovementManager:
 
             self._is_listening = desired_state
             self._last_listening_blend_time = now
+
             if desired_state:
-                # Freeze: snapshot current commanded antennas and reset blend
                 self._listening_antennas = (
                     float(self._last_commanded_pose[1][0]),
                     float(self._last_commanded_pose[1][1]),
                 )
                 self._antenna_unfreeze_blend = 0.0
             else:
-                # Unfreeze: restart blending from frozen pose
                 self._antenna_unfreeze_blend = 0.0
+
             self.state.update_activity()
+
         else:
             logger.warning("Unknown command received by MovementManager: %s", command)
 
@@ -490,15 +577,34 @@ class MovementManager:
             self.state.current_move = None
             self.state.move_start_time = None
 
-            if self.move_queue:
-                self.state.current_move = self.move_queue.popleft()
+            while self.move_queue:
+                candidate = self.move_queue.popleft()
+                is_breathing = isinstance(candidate, BreathingMove)
+
+                if is_breathing and not self._breathing_enabled:
+                    continue
+                if (not is_breathing) and (not self._primary_moves_enabled):
+                    continue
+
+                self.state.current_move = candidate
                 self.state.move_start_time = current_time
-                # Any real move cancels breathing mode flag
-                self._breathing_active = isinstance(self.state.current_move, BreathingMove)
-                logger.debug(f"Starting new move, duration: {self.state.current_move.duration}s")
+                self._breathing_active = is_breathing
+                logger.debug(
+                    "Starting new move, duration: %ss",
+                    self.state.current_move.duration,
+                )
+                break
+
 
     def _manage_breathing(self, current_time: float) -> None:
         """Manage automatic breathing when idle."""
+        if not self._breathing_enabled:
+            if isinstance(self.state.current_move, BreathingMove):
+                self.state.current_move = None
+                self.state.move_start_time = None
+            self._breathing_active = False
+            return
+
         if (
             self.state.current_move is None
             and not self.move_queue
@@ -508,8 +614,6 @@ class MovementManager:
             idle_for = current_time - self.state.last_activity_time
             if idle_for >= self.idle_inactivity_delay:
                 try:
-                    # These 2 functions return the latest available sensor data from the robot, but don't perform I/O synchronously.
-                    # Therefore, we accept calling them inside the control loop.
                     _, current_antennas = self.current_robot.get_current_joint_positions()
                     current_head_pose = self.current_robot.get_current_head_pose()
 
@@ -520,9 +624,14 @@ class MovementManager:
                         interpolation_start_pose=current_head_pose,
                         interpolation_start_antennas=current_antennas,
                         interpolation_duration=1.0,
+                        antenna_params_provider=self._affect_bias.get_breathing_params,
                     )
+
                     self.move_queue.append(breathing_move)
-                    logger.debug("Started breathing after %.1fs of inactivity", idle_for)
+                    logger.debug(
+                        "Started breathing after %.1fs of inactivity",
+                        idle_for,
+                    )
                 except Exception as e:
                     self._breathing_active = False
                     logger.error("Failed to start breathing: %s", e)
@@ -538,8 +647,17 @@ class MovementManager:
 
     def _get_primary_pose(self, current_time: float) -> FullBodyPose:
         """Get the primary full body pose from current move or neutral."""
-        # When a primary move is playing, sample it and cache the resulting pose
         if self.state.current_move is not None and self.state.move_start_time is not None:
+            is_breathing = isinstance(self.state.current_move, BreathingMove)
+
+            if (is_breathing and not self._breathing_enabled) or (
+                (not is_breathing) and not self._primary_moves_enabled
+            ):
+                if self.state.last_primary_pose is not None:
+                    return clone_full_body_pose(self.state.last_primary_pose)
+                neutral = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
+                return (neutral, (0.0, 0.0), 0.0)
+
             move_time = current_time - self.state.move_start_time
             head, antennas, body_yaw = self.state.current_move.evaluate(move_time)
 
@@ -550,46 +668,48 @@ class MovementManager:
             if body_yaw is None:
                 body_yaw = 0.0
 
-            antennas_tuple = (float(antennas[0]), float(antennas[1]))
-            head_copy = head.copy()
-            primary_full_body_pose = (
-                head_copy,
-                antennas_tuple,
+            primary_pose = (
+                head.copy(),
+                (float(antennas[0]), float(antennas[1])),
                 float(body_yaw),
             )
 
-            self.state.last_primary_pose = clone_full_body_pose(primary_full_body_pose)
-        # Otherwise reuse the last primary pose so we avoid jumps between moves
-        elif self.state.last_primary_pose is not None:
-            primary_full_body_pose = clone_full_body_pose(self.state.last_primary_pose)
-        else:
-            neutral_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
-            primary_full_body_pose = (neutral_head_pose, (0.0, 0.0), 0.0)
-            self.state.last_primary_pose = clone_full_body_pose(primary_full_body_pose)
+            self.state.last_primary_pose = clone_full_body_pose(primary_pose)
+            return primary_pose
 
-        return primary_full_body_pose
+        if self.state.last_primary_pose is not None:
+            return clone_full_body_pose(self.state.last_primary_pose)
+
+        neutral = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
+        primary_pose = (neutral, (0.0, 0.0), 0.0)
+        self.state.last_primary_pose = clone_full_body_pose(primary_pose)
+        return primary_pose
+
+
 
     def _get_secondary_pose(self) -> FullBodyPose:
         """Get the secondary full body pose from speech and face tracking offsets."""
-        # Combine speech sway offsets + face tracking offsets for secondary pose
+        speech = self.state.speech_offsets if self._speech_offsets_enabled else (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        face = self.state.face_tracking_offsets if self._face_tracking_enabled else (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
         secondary_offsets = [
-            self.state.speech_offsets[0] + self.state.face_tracking_offsets[0],
-            self.state.speech_offsets[1] + self.state.face_tracking_offsets[1],
-            self.state.speech_offsets[2] + self.state.face_tracking_offsets[2],
-            self.state.speech_offsets[3] + self.state.face_tracking_offsets[3],
-            self.state.speech_offsets[4] + self.state.face_tracking_offsets[4],
-            self.state.speech_offsets[5] + self.state.face_tracking_offsets[5],
+        speech[0] + face[0],
+        speech[1] + face[1],
+        speech[2] + face[2],
+        speech[3] + face[3],
+        speech[4] + face[4],
+        speech[5] + face[5],
         ]
 
         secondary_head_pose = create_head_pose(
-            x=secondary_offsets[0],
-            y=secondary_offsets[1],
-            z=secondary_offsets[2],
-            roll=secondary_offsets[3],
-            pitch=secondary_offsets[4],
-            yaw=secondary_offsets[5],
-            degrees=False,
-            mm=False,
+        x=secondary_offsets[0],
+        y=secondary_offsets[1],
+        z=secondary_offsets[2],
+        roll=secondary_offsets[3],
+        pitch=secondary_offsets[4],
+        yaw=secondary_offsets[5],
+        degrees=False,
+        mm=False,
         )
         return (secondary_head_pose, (0.0, 0.0), 0.0)
 
@@ -602,34 +722,35 @@ class MovementManager:
 
         head_matrix, antennas, body_yaw = combined
 
-        # Extract translation
         x = head_matrix[0, 3]
         y = head_matrix[1, 3]
         z = head_matrix[2, 3]
 
-        # Extract rotation (ZYX order)
         yaw = np.arctan2(head_matrix[1, 0], head_matrix[0, 0])
         pitch = np.arcsin(np.clip(-head_matrix[2, 0], -1.0, 1.0))
         roll = np.arctan2(head_matrix[2, 1], head_matrix[2, 2])
 
         current_vec = (x, y, z, roll, pitch, yaw)
 
-        bias = self._affect_bias.compute_bias(current_vec)
+        if self._affect_enabled:
+            bias = self._affect_bias.compute_bias(current_vec)
+        else:
+            bias = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
         affect_head = create_head_pose(
-        x=bias[0],
-        y=bias[1],
-        z=bias[2],
-        roll=bias[3],
-        pitch=bias[4],
-        yaw=bias[5],
-        degrees=False,
-        mm=False,
+            x=bias[0],
+            y=bias[1],
+            z=bias[2],
+            roll=bias[3],
+            pitch=bias[4],
+            yaw=bias[5],
+            degrees=False,
+            mm=False,
         )
 
         affect_secondary = (affect_head, (0.0, 0.0), 0.0)
-
         return combine_full_body(combined, affect_secondary)
+
 
     def _update_primary_motion(self, current_time: float) -> None:
         """Advance queue state and idle behaviours for this tick."""
@@ -744,13 +865,17 @@ class MovementManager:
 
     def _update_face_tracking(self, current_time: float) -> None:
         """Get face tracking offsets from camera worker thread."""
+        if not self._face_tracking_enabled:
+            self.state.face_tracking_offsets = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+            return
+
         if self.camera_worker is not None:
-            # Get face tracking offsets from camera worker thread
             offsets = self.camera_worker.get_face_tracking_offsets()
             self.state.face_tracking_offsets = offsets
         else:
-            # No camera worker, use neutral offsets
             self.state.face_tracking_offsets = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+
 
     def start(self) -> None:
         """Start the worker thread that drives the 100 Hz control loop."""
