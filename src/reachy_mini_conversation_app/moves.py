@@ -51,6 +51,7 @@ from reachy_mini.utils.interpolation import (
     linear_pose_interpolation,
 )
 
+from reachy_mini_conversation_app.affect.affect_bias import AffectBias
 
 logger = logging.getLogger(__name__)
 
@@ -313,6 +314,9 @@ class MovementManager:
         self._freq_stats = LoopFrequencyStats()
         self._freq_snapshot = LoopFrequencyStats()
 
+        # Emotional bias integration
+        self._affect_bias = AffectBias()
+
     def queue_move(self, move: Move) -> None:
         """Queue a primary move to run after the currently executing one.
 
@@ -337,6 +341,10 @@ class MovementManager:
         with self._speech_offsets_lock:
             self._pending_speech_offsets = offsets
             self._speech_offsets_dirty = True
+
+    def update_vadcc(self, vadcc: Tuple[float, float, float, float, float]) -> None:
+        """Update emotional VADCC state used by AffectBias."""
+        self._affect_bias.update_vadcc(vadcc)
 
     def set_moving_state(self, duration: float) -> None:
         """Mark the robot as actively moving for the provided duration.
@@ -589,7 +597,39 @@ class MovementManager:
         """Compose primary and secondary poses into a single command pose."""
         primary = self._get_primary_pose(current_time)
         secondary = self._get_secondary_pose()
-        return combine_full_body(primary, secondary)
+
+        combined = combine_full_body(primary, secondary)
+
+        head_matrix, antennas, body_yaw = combined
+
+        # Extract translation
+        x = head_matrix[0, 3]
+        y = head_matrix[1, 3]
+        z = head_matrix[2, 3]
+
+        # Extract rotation (ZYX order)
+        yaw = np.arctan2(head_matrix[1, 0], head_matrix[0, 0])
+        pitch = np.arcsin(np.clip(-head_matrix[2, 0], -1.0, 1.0))
+        roll = np.arctan2(head_matrix[2, 1], head_matrix[2, 2])
+
+        current_vec = (x, y, z, roll, pitch, yaw)
+
+        bias = self._affect_bias.compute_bias(current_vec)
+
+        affect_head = create_head_pose(
+        x=bias[0],
+        y=bias[1],
+        z=bias[2],
+        roll=bias[3],
+        pitch=bias[4],
+        yaw=bias[5],
+        degrees=False,
+        mm=False,
+        )
+
+        affect_secondary = (affect_head, (0.0, 0.0), 0.0)
+
+        return combine_full_body(combined, affect_secondary)
 
     def _update_primary_motion(self, current_time: float) -> None:
         """Advance queue state and idle behaviours for this tick."""

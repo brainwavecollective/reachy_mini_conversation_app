@@ -101,6 +101,10 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         # Start AffectEngine
         await self.affect_engine.start()
         
+        # Tap into movement 
+        self.movement_adapter = MovementAdapter(self.deps.movement_manager)
+        self.affect_engine.subscribe(self.movement_adapter.update)
+
         # Wire up eyes
         self.eyes_adapter = EyesAdapter()
         await self.eyes_adapter.connect()
@@ -343,8 +347,8 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 self.output_queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
-	
-	# Stop Eyes
+        
+        # Stop Eyes
         if hasattr(self, "eyes_adapter"):
             await self.eyes_adapter.close()
 
