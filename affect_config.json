@@ -1,20 +1,20 @@
 {
-  "strength": 0.7,
+  "strength": 0.5,
   "target": {
-    "x": -0.0,
+    "x": -0.002,
     "y": 0.0,
-    "z": -0.0,
+    "z": -0.01,
     "roll": 0.0,
-    "pitch": 0.0,
-    "yaw": 0.0,
-    "body_yaw": 0.0
+    "pitch": 0.2,
+    "yaw": 0.05,
+    "body_yaw": 0.05
   },
   "breathing": {
-    "antenna_amplitude_deg": 12,
-    "antenna_frequency_hz": 0.6
+    "antenna_amplitude_deg": 3,
+    "antenna_frequency_hz": 0.3
   },
-  "base_gain": 0.6,
-  "attack_time": 1.5,
-  "release_time": 3.0,
-  "axis_weights": [1.0, 1.0, 1.0, 0.6, 1.0, 1.0]
+  "base_gain": 0.4,
+  "attack_time": 2.5,
+  "release_time": 4.0,
+  "axis_weights": [1, 1, 1, 1, 1, 1]
 }
