@@ -84,7 +84,13 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
 
     def copy(self) -> "OpenaiRealtimeHandler":
-        return OpenaiRealtimeHandler(self.deps, self.gradio_mode, self.instance_path)
+        return OpenaiRealtimeHandler(
+        deps=self.deps,
+        gradio_mode=self.gradio_mode,
+        debug=self.debug,
+        instance_path=self.instance_path,
+        )
+
 
     # --------------------------------------------------
     # STARTUP
@@ -243,6 +249,16 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 ):
                     transcript = event.transcript
 
+                    logger.debug(
+                    "AFFECT TRIGGER event=%s len=%d hash=%d",
+                    event.type,
+                    len(transcript),
+                    hash(transcript),
+                    )
+
+                    asyncio.create_task(self._feed_affect(transcript))
+
+
                     await self.output_queue.put(
                         AdditionalOutputs(
                             {"role": "assistant", "content": transcript}
@@ -291,11 +307,22 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
     async def _feed_affect(self, transcript: str) -> None:
         try:
-            logger.debug("AFFECT <- assistant: %s", transcript)
+            t0 = time.perf_counter()
+
+            logger.debug("AFFECT START hash=%d", hash(transcript))
+
             result = await self.affect_engine.process_text(transcript)
-            logger.debug("AFFECT -> vibe: %s", result.get("vibe"))
+
+            dt = time.perf_counter() - t0
+
+            logger.debug(
+                "AFFECT DONE hash=%d latency=%.3fs vibe=%s",
+                hash(transcript),
+                dt,
+                result.get("vibe"),
+            )
         except Exception as e:
-            logger.exception("AffectEngine failed: %s", e)
+        	logger.exception("AffectEngine failed: %s", e)
 
 
     # --------------------------------------------------

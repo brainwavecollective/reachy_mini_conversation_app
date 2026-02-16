@@ -20,12 +20,7 @@ class AffectManifold:
 
     def compute_motion(self, vadcc: Vec5) -> Dict:
         weights = self._compute_weights(vadcc)
-        peak_weight = max(weights)
-
-        blended = self._blend_motion(weights)
-        blended["strength"] = peak_weight
-
-        return blended
+        return self._blend_motion(weights)
 
     # -----------------------------------------------------
     # RBF
