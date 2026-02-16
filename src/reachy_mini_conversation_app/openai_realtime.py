@@ -28,6 +28,7 @@ from reachy_mini_conversation_app.tools.core_tools import (
     dispatch_tool_call,
 )
 
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -240,13 +241,10 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                     )
 
                 # ---------------------------------------
-                # ASSISTANT TRANSCRIPTS (FEED ENGINE)
+                # ASSISTANT TRANSCRIPT 
                 # ---------------------------------------
 
-                if event.type in (
-                    "response.audio_transcript.done",
-                    "response.output_audio_transcript.done",
-                ):
+                if event.type == "response.output_audio_transcript.done":
                     transcript = event.transcript
 
                     logger.debug(
@@ -256,16 +254,12 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                     hash(transcript),
                     )
 
-                    asyncio.create_task(self._feed_affect(transcript))
-
-
                     await self.output_queue.put(
-                        AdditionalOutputs(
-                            {"role": "assistant", "content": transcript}
-                        )
+                    AdditionalOutputs(
+                        {"role": "assistant", "content": transcript}
+                    )
                     )
 
-                    # Feed assistant speech into AffectEngine
                     asyncio.create_task(self._feed_affect(transcript))
 
 
@@ -322,7 +316,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 result.get("vibe"),
             )
         except Exception as e:
-        	logger.exception("AffectEngine failed: %s", e)
+            logger.exception("AffectEngine failed: %s", e)
 
 
     # --------------------------------------------------
