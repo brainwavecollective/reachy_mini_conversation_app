@@ -100,73 +100,73 @@ class AffectManifold:
 
             # Neutral
             self._anchor(
-                (0.5,0.5,0.5,0.5,0.5),
+                (0.5, 0.5, 0.5, 0.5, 0.5),
                 pitch=0.0, z=0.0,
-                amp=6, freq=0.6,
+                amp=8, freq=0.5,
                 strength=0.6
             ),
 
             # Joy
             self._anchor(
-                (0.9,0.85,0.8,0.7,0.8),
+                (0.9, 0.85, 0.8, 0.7, 0.8),
                 pitch=-0.2, z=0.01,
-                amp=10, freq=0.7,
+                amp=22, freq=2.2,
                 strength=0.7
             ),
 
             # Sadness
             self._anchor(
-                (0.1,0.2,0.3,0.6,0.55),
+                (0.1, 0.2, 0.3, 0.6, 0.55),
                 pitch=0.3, z=-0.015,
-                amp=2, freq=0.25,
+                amp=3, freq=0.12,
                 strength=0.75
             ),
 
             # Anger
             self._anchor(
-                (0.1,0.9,0.9,0.8,0.9),
+                (0.1, 0.9, 0.9, 0.8, 0.9),
                 pitch=-0.1, z=0.0,
-                amp=4, freq=1.1,
+                amp=6, freq=1.8,
                 strength=0.8
             ),
 
             # Anxiety
             self._anchor(
-                (0.2,0.85,0.4,0.85,0.85),
+                (0.2, 0.85, 0.4, 0.85, 0.85),
                 pitch=0.05, z=-0.01,
-                amp=3, freq=1.2,
+                amp=5, freq=2.8,
                 strength=0.7
             ),
 
             # Calm
             self._anchor(
-                (0.7,0.2,0.4,0.6,0.6),
+                (0.7, 0.2, 0.4, 0.6, 0.6),
                 pitch=0.0, z=0.005,
-                amp=4, freq=0.2,
+                amp=10, freq=0.25,
                 strength=0.5
             ),
 
             # Pride
             self._anchor(
-                (0.85,0.65,0.85,0.65,0.65),
+                (0.85, 0.65, 0.85, 0.65, 0.65),
                 pitch=-0.3, z=0.015,
-                amp=12, freq=0.4,
+                amp=18, freq=0.8,
                 strength=0.75
             ),
 
             # Curiosity
             self._anchor(
-                (0.7,0.75,0.4,0.8,0.75),
+                (0.7, 0.75, 0.4, 0.8, 0.75),
                 pitch=-0.05, z=0.005,
-                amp=9, freq=0.55,
+                amp=14, freq=1.6,
                 strength=0.65
             ),
 
             # Boredom
             self._anchor(
-                (0.35,0.15,0.5,0.6,0.55),
+                (0.35, 0.15, 0.5, 0.6, 0.55),
                 pitch=0.15, z=-0.01,
-                amp=3, freq=0.18,
+                amp=4, freq=0.15,
                 strength=0.6
             ),
 
@@ -192,6 +192,6 @@ class AffectManifold:
                 "strength": strength,
                 "attack_time": 0.2,
                 "release_time": 0.6,
-                "axis_weights": [1,1,1,0.6,1,1]
+                "axis_weights": [1, 1, 1, 0.6, 1, 1]
             }
         }

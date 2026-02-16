@@ -135,6 +135,46 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
     # REALTIME SESSION
     # --------------------------------------------------
 
+    async def _dispatch_tool(self, event) -> None:
+        """Execute a tool call without blocking the audio event loop."""
+        tool_name = getattr(event, "name", None)
+        args_json_str = getattr(event, "arguments", None)
+        call_id = getattr(event, "call_id", None)
+
+        if not isinstance(tool_name, str):
+            return
+
+        try:
+            tool_result = await dispatch_tool_call(
+                tool_name,
+                args_json_str,
+                self.deps,
+            )
+        except Exception as e:
+            tool_result = {"error": str(e)}
+
+        if not isinstance(call_id, str):
+            return
+
+        try:
+            await self.connection.conversation.item.create(
+                item={
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": json.dumps(tool_result),
+                },
+            )
+
+            await self.connection.response.create(
+                response={
+                    "instructions": "Use the tool result and answer concisely in speech.",
+                },
+            )
+        except Exception as e:
+            logger.exception("Tool follow-up failed for %s: %s", tool_name, e)
+
+
+
     async def _run_realtime_session(self) -> None:
         async with self.client.realtime.connect(model=config.MODEL_NAME) as conn:
             await conn.session.update(
@@ -239,38 +279,8 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 # ---------------------------------------
                 # TOOL CALLS
                 # ---------------------------------------
-
                 if event.type == "response.function_call_arguments.done":
-                    tool_name = getattr(event, "name", None)
-                    args_json_str = getattr(event, "arguments", None)
-                    call_id = getattr(event, "call_id", None)
-
-                    if not isinstance(tool_name, str):
-                        continue
-
-                    try:
-                        tool_result = await dispatch_tool_call(
-                            tool_name,
-                            args_json_str,
-                            self.deps,
-                        )
-                    except Exception as e:
-                        tool_result = {"error": str(e)}
-
-                    if isinstance(call_id, str):
-                        await self.connection.conversation.item.create(
-                            item={
-                                "type": "function_call_output",
-                                "call_id": call_id,
-                                "output": json.dumps(tool_result),
-                            },
-                        )
-
-                    await self.connection.response.create(
-                        response={
-                            "instructions": "Use the tool result and answer concisely in speech.",
-                        },
-                    )
+                    asyncio.create_task(self._dispatch_tool(event))
 
                 # ---------------------------------------
                 # ERROR
@@ -363,4 +373,5 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         elapsed = loop_time - self.start_time
         dt = datetime.now()
         return f"[{dt.strftime('%Y-%m-%d %H:%M:%S')} | +{elapsed:.1f}s]"
-
+        
+    

@@ -20,7 +20,7 @@ wheels = [
 [[package]]
 name = "affect-engine"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/brainwavecollective/affect-engine.git#47d05504d088a362ce6ac11100fb9ca2d524500b" }
+source = { git = "ssh://git@github.com/brainwavecollective/affect-engine.git#b24f5df0b560e5eaac4d23e625ebd53e7f5c4ddd" }
 dependencies = [
     { name = "datasets" },
     { name = "huggingface-hub" },
