@@ -321,9 +321,10 @@ class MovementManager:
         self._set_target_err_suppressed = 0
 
         # Layer switches (hard on/off)
-        self._primary_moves_enabled = False
+        self._primary_moves_enabled = True 
+        self._scripted_moves_enabled = False 
         self._breathing_enabled = True
-        self._speech_offsets_enabled = False
+        self._speech_offsets_enabled = True
         self._face_tracking_enabled = True
         self._affect_enabled = True
 
@@ -382,7 +383,9 @@ class MovementManager:
         """Include/exclude affect bias offsets in the final pose."""
         self._command_queue.put(("set_affect_enabled", bool(enabled)))
 
-
+    def set_scripted_moves_enabled(self, enabled: bool) -> None:
+        """Enable/disable large scripted moves (emotion, dance, goto)."""
+        self._command_queue.put(("set_scripted_enabled", bool(enabled)))
 
 
     def queue_move(self, move: Move) -> None:
@@ -558,6 +561,10 @@ class MovementManager:
             self._affect_enabled = bool(payload)
             self.state.update_activity()
 
+        elif command == "set_scripted_enabled":
+            self._scripted_moves_enabled = bool(payload)
+            self.state.update_activity()
+
         elif command == "set_listening":
             desired_state = bool(payload)
             now = self._now()
@@ -607,7 +614,10 @@ class MovementManager:
 
                 if is_breathing and not self._breathing_enabled:
                     continue
-                if (not is_breathing) and (not self._primary_moves_enabled):
+
+                # Scripted move filtering
+                is_scripted = not is_breathing
+                if is_scripted and not self._scripted_moves_enabled:
                     continue
 
                 self.state.current_move = candidate
@@ -738,26 +748,34 @@ class MovementManager:
         return (secondary_head_pose, (0.0, 0.0), 0.0)
 
     def _compose_full_body_pose(self, current_time: float) -> FullBodyPose:
-        """Compose primary and secondary poses into a single command pose."""
+        """Compose full body pose with correct layering:
+        
+        Primary (breathing / baseline)
+        → Affect bias (persistent emotional posture)
+        → Speech + face tracking (dynamic modulation)
+        """
+
+        # 1️⃣ Primary baseline pose (breathing / neutral)
         primary = self._get_primary_pose(current_time)
-        secondary = self._get_secondary_pose()
+        primary_head, primary_antennas, primary_body_yaw = primary
 
-        combined = combine_full_body(primary, secondary)
+        # ---------------------------------------------------
+        # 2️⃣ Compute affect bias from PRIMARY ONLY
+        # ---------------------------------------------------
 
-        head_matrix, antennas, body_yaw = combined
+        # Extract pose vector from primary head matrix
+        x = primary_head[0, 3]
+        y = primary_head[1, 3]
+        z = primary_head[2, 3]
 
-        x = head_matrix[0, 3]
-        y = head_matrix[1, 3]
-        z = head_matrix[2, 3]
+        yaw = np.arctan2(primary_head[1, 0], primary_head[0, 0])
+        pitch = np.arcsin(np.clip(-primary_head[2, 0], -1.0, 1.0))
+        roll = np.arctan2(primary_head[2, 1], primary_head[2, 2])
 
-        yaw = np.arctan2(head_matrix[1, 0], head_matrix[0, 0])
-        pitch = np.arcsin(np.clip(-head_matrix[2, 0], -1.0, 1.0))
-        roll = np.arctan2(head_matrix[2, 1], head_matrix[2, 2])
-
-        current_vec = (x, y, z, roll, pitch, yaw)
+        primary_vec = (x, y, z, roll, pitch, yaw)
 
         if self._affect_enabled:
-            bias = self._affect_bias.compute_bias(current_vec)
+            bias = self._affect_bias.compute_bias(primary_vec)
         else:
             bias = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
@@ -773,7 +791,20 @@ class MovementManager:
         )
 
         affect_secondary = (affect_head, (0.0, 0.0), 0.0)
-        return combine_full_body(combined, affect_secondary)
+
+        # Apply affect to primary first
+        primary_with_affect = combine_full_body(primary, affect_secondary)
+
+        # ---------------------------------------------------
+        # 3️⃣ Now apply speech + face tracking on top
+        # ---------------------------------------------------
+
+        secondary = self._get_secondary_pose()
+
+        final_pose = combine_full_body(primary_with_affect, secondary)
+
+        return final_pose
+
 
 
     def _update_primary_motion(self, current_time: float) -> None:
