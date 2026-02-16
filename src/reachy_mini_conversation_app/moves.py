@@ -96,6 +96,15 @@ class BreathingMove(Move):  # type: ignore
         self._antenna_params_provider = antenna_params_provider
         self._antenna_amp_rad_default = np.deg2rad(15.0)
         self._antenna_freq_hz_default = 0.5
+        
+        self._antenna_phase = 0.0
+        self._last_eval_time = None
+
+        self._current_amp = self._antenna_amp_rad_default
+        self._current_freq = self._antenna_freq_hz_default
+        self._param_smoothing = 0.1  # 0.05–0.2 is good range
+
+
 
     @property
     def duration(self) -> float:
@@ -130,13 +139,28 @@ class BreathingMove(Move):  # type: ignore
             # Antenna sway (opposite directions)
             if self._antenna_params_provider is not None:
                 amp_deg, freq_hz = self._antenna_params_provider()
-                amp = np.deg2rad(float(amp_deg))
-                freq = float(freq_hz)
+                target_amp = np.deg2rad(float(amp_deg))
+                target_freq = float(freq_hz)
             else:
-                amp = self._antenna_amp_rad_default
-                freq = self._antenna_freq_hz_default
+                target_amp = self._antenna_amp_rad_default
+                target_freq = self._antenna_freq_hz_default
 
-            antenna_sway = amp * np.sin(2 * np.pi * freq * breathing_time)
+            # ---- Smooth parameters ----
+            alpha = self._param_smoothing
+            self._current_amp += (target_amp - self._current_amp) * alpha
+            self._current_freq += (target_freq - self._current_freq) * alpha
+
+            # ---- Phase integration (continuous) ----
+            now = time.monotonic()
+            if self._last_eval_time is None:
+                self._last_eval_time = now
+
+            dt = now - self._last_eval_time
+            self._last_eval_time = now
+
+            self._antenna_phase += dt * self._current_freq * 2.0 * np.pi
+
+            antenna_sway = self._current_amp * np.sin(self._antenna_phase)
             antennas = np.array([antenna_sway, -antenna_sway], dtype=np.float64)
 
 
