@@ -14,7 +14,7 @@ dependencies = [
     "aiortc>=1.13.0",
     "fastrtc>=0.0.34",
     "gradio==5.50.1.dev1",
-    "huggingface-hub==1.3.0",
+    "huggingface-hub>=1.4.0",
     "opencv-python>=4.12.0.88",
 
     #Environment variables
@@ -29,6 +29,14 @@ dependencies = [
     "reachy-mini>=1.3.1",
     "eclipse-zenoh~=1.7.0",
     "gradio_client>=1.13.3",
+
+    #Emotional Engine & Display
+    "anima @ git+ssh://git@github.com/brainwavecollective/anima.git",
+    "anima-reachy-conversation @ git+ssh://git@github.com/brainwavecollective/anima-reachy-conversation.git",
+
+    #LED Eyes
+    "reachy-eyes @ git+https://github.com/brainwavecollective/reachy-eyes.git",
+
 ]
 
 [project.optional-dependencies]
