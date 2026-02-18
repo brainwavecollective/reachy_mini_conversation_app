@@ -165,9 +165,9 @@ wheels = [
 ]
 
 [[package]]
-name = "anima"
-version = "0.1.0"
-source = { git = "ssh://git@github.com/brainwavecollective/anima.git#515c70bddd44eff9545f5cbbdb74c7a71e107160" }
+name = "animal"
+version = "0.0.1"
+source = { git = "ssh://git@github.com/brainwavecollective/animal.git#f14f9ace9ab4ac98a45cfcb7ede32278fffa5977" }
 dependencies = [
     { name = "datasets" },
     { name = "huggingface-hub" },
@@ -179,11 +179,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "anima-reachy-conversation"
-version = "0.1.0"
-source = { git = "ssh://git@github.com/brainwavecollective/anima-reachy-conversation.git#fa54010ab9beb7d98e0fa8386f25e7c75bbc9316" }
+name = "animal-reachy-conversation"
+version = "0.0.1"
+source = { git = "ssh://git@github.com/brainwavecollective/animal-reachy-conversation.git#effbfce56e7969b7b6cf3c5a133cf27d09c9637e" }
 dependencies = [
-    { name = "anima" },
+    { name = "animal" },
 ]
 
 [[package]]
@@ -3342,8 +3342,8 @@ version = "0.2.2"
 source = { editable = "." }
 dependencies = [
     { name = "aiortc" },
-    { name = "anima" },
-    { name = "anima-reachy-conversation" },
+    { name = "animal" },
+    { name = "animal-reachy-conversation" },
     { name = "eclipse-zenoh" },
     { name = "fastrtc" },
     { name = "gradio" },
@@ -3397,8 +3397,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiortc", specifier = ">=1.13.0" },
-    { name = "anima", git = "ssh://git@github.com/brainwavecollective/anima.git" },
-    { name = "anima-reachy-conversation", git = "ssh://git@github.com/brainwavecollective/anima-reachy-conversation.git" },
+    { name = "animal", git = "ssh://git@github.com/brainwavecollective/animal.git" },
+    { name = "animal-reachy-conversation", git = "ssh://git@github.com/brainwavecollective/animal-reachy-conversation.git" },
     { name = "eclipse-zenoh", specifier = "~=1.7.0" },
     { name = "fastrtc", specifier = ">=0.0.34" },
     { name = "gradio", specifier = "==5.50.1.dev1" },

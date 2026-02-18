@@ -13,7 +13,6 @@ DEFAULT_PROFILES_DIRECTORY = Path(__file__).parent / "profiles"
 
 logger = logging.getLogger(__name__)
 
-
 def _env_flag(name: str, default: bool = False) -> bool:
     """Parse a boolean environment flag.
 
@@ -106,6 +105,11 @@ class Config:
 
     # Required
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # The key is downloaded in console.py if needed
+
+    AFFECT_ENGINE_DATA_PATH: str = os.getenv(
+        "AFFECT_ENGINE_DATA_PATH",
+        str(Path(__file__).resolve().parents[2] / "data" / "NRC-VAD-Lexicon-v2.1" / "NRC-VAD-Lexicon-v2.1.txt"),
+    )
 
     # Optional
     MODEL_NAME = os.getenv("MODEL_NAME", "gpt-realtime")
