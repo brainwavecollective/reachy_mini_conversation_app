@@ -644,7 +644,8 @@ class MovementManager:
                 last_offsets = getattr(self, '_last_logged_offsets', None)
                 last_log_time = getattr(self, '_last_offset_log_time', 0.0)
                 if new_offsets != last_offsets and (now - last_log_time) >= 1.0:
-                    logger.debug(f"[MOVES] Emotional offsets changed: head_z={motion.head_z:.4f}, pitch={motion.head_pitch:.4f}, ant_left={motion.antenna_left_base:.4f}")
+                    logger.debug(f"[MOVES] Emotional offsets changed: head_z={motion.head_z:.4f}, pitch={motion.head_pitch:.4f}, ant_left={motion.antenna_left_base:.4f}, ant_right={motion.antenna_right_base:.4f}")
+                    
                     self._last_logged_offsets = new_offsets
                     self._last_offset_log_time = now
 
