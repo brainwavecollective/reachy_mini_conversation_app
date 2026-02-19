@@ -50,8 +50,8 @@ from reachy_mini.utils.interpolation import (
     compose_world_offset,
     linear_pose_interpolation,
 )
-from reachy_mini.config import config
 
+from reachy_mini_conversation_app.config import config
 
 
 logger = logging.getLogger(__name__)
@@ -99,7 +99,8 @@ class BreathingMove(Move):  # type: ignore
         self._antenna_amp_rad_default = np.deg2rad(config.ANTENNA_BASE_AMPLITUDE)
         self._antenna_freq_hz_default = config.ANTENNA_BASE_FREQUENCY
        
-       
+        self._last_breath_log_time = 0.0
+
         # Phase tracking for continuous antenna motion
         self._antenna_phase = 0.0
         self._last_eval_time: Optional[float] = None
@@ -167,6 +168,16 @@ class BreathingMove(Move):  # type: ignore
             self._current_right_base += (target_right_base - self._current_right_base) * alpha
             self._current_amp += (target_amp - self._current_amp) * alpha
             self._current_freq += (target_freq - self._current_freq) * alpha
+
+            now = time.monotonic()
+            if now - self._last_breath_log_time >= 1.0:
+                logger.debug(
+                    "[BREATH] amp_deg=%.2f freq_hz=%.2f",
+                    np.rad2deg(self._current_amp),
+                    self._current_freq,
+                )
+                self._last_breath_log_time = now
+
 
             # Phase integration (continuous)
             now = time.monotonic()
@@ -365,8 +376,13 @@ class MovementManager:
         Args:
             adapter: MovementAdapter instance from anima_reachy_conversation
         """
+        
+        # Force breathing rebuild so it picks up provider
+        self._command_queue.put(("clear_queue", None))
+        
         self._movement_adapter = adapter
         logger.info("Movement adapter set for emotional expression")
+        
 
     def queue_move(self, move: Move) -> None:
         """Queue a primary move to run after the currently executing one.
@@ -635,13 +651,13 @@ class MovementManager:
         ]
 
         # Add emotional offsets if adapter is available
-        antenna_left_offset = 0.0
-        antenna_right_offset = 0.0
+        #antenna_left_offset = 0.0
+        #antenna_right_offset = 0.0
         body_yaw_offset = 0.0
         
         if self._movement_adapter is not None:
             try:
-                motion = self._movement_adapter._current_motion
+                motion = self._movement_adapter.get_body_motion()
                 now = self._now()
                 new_offsets = (round(motion.head_z, 4), round(motion.head_pitch, 4), round(motion.antenna_left_base, 4))
                 last_offsets = getattr(self, '_last_logged_offsets', None)
@@ -660,9 +676,9 @@ class MovementManager:
                 secondary_offsets[4] += motion.head_pitch
                 secondary_offsets[5] += motion.head_yaw
                 
-                # Add antenna base offsets
-                antenna_left_offset = motion.antenna_left_base
-                antenna_right_offset = motion.antenna_right_base
+                # Antenna base offsets
+                #antenna_left_offset = motion.antenna_left_base
+                #antenna_right_offset = motion.antenna_right_base
                 
                 # Add body yaw offset
                 body_yaw_offset = motion.body_yaw
@@ -682,9 +698,10 @@ class MovementManager:
         
         return (
             secondary_head_pose,
-            (antenna_left_offset, antenna_right_offset),
+            (0.0, 0.0),
             body_yaw_offset,
         )
+
 
     def _compose_full_body_pose(self, current_time: float) -> FullBodyPose:
         """Compose primary and secondary poses into a single command pose."""
