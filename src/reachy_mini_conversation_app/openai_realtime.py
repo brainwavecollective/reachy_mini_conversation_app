@@ -193,6 +193,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 base_antenna_amplitude=config.ANTENNA_BASE_AMPLITUDE,
                 base_antenna_frequency=config.ANTENNA_BASE_FREQUENCY,
                 sigma=config.ANIMA_TRANSITION_SIGMA,
+                vadcc_exponent=config.ANIMA_VADCC_EXPONENT,
             )
             
             # Subscribe adapter to anima
