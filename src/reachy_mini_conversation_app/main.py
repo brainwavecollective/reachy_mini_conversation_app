@@ -21,6 +21,7 @@ from reachy_mini_conversation_app.utils import (
     log_connection_troubleshooting,
 )
 
+import logging
 
 def update_chatbot(chatbot: List[Dict[str, Any]], response: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Update the chatbot with AdditionalOutputs."""
@@ -50,6 +51,12 @@ def run(
     from reachy_mini_conversation_app.audio.head_wobbler import HeadWobbler
 
     logger = setup_logger(args.debug)
+
+    # Suppress noisy submodule logs
+    logging.getLogger("reachy_mini_conversation_app.openai_realtime").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
     logger.info("Starting Reachy Mini Conversation App")
 
     if args.no_camera and args.head_tracker is not None:
