@@ -357,7 +357,7 @@ class MovementManager:
     def set_movement_adapter(self, adapter: Any) -> None:
         """Set the movement adapter for emotional expression.
         
-        Called by openai_realtime.py after initialization to wire animal integration.
+        Called by openai_realtime.py after initialization to wire anima integration.
         
         Args:
             adapter: MovementAdapter instance from anima_reachy_conversation
