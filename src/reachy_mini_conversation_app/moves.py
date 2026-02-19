@@ -352,7 +352,7 @@ class MovementManager:
         self._freq_snapshot = LoopFrequencyStats()
 
         # Emotional expression integration (set by openai_realtime.py)
-        self._movement_adapter: Optional[Any] = None  # Will be MovementAdapter from animal_reachy_conversation
+        self._movement_adapter: Optional[Any] = None  # Will be MovementAdapter from anima_reachy_conversation
 
     def set_movement_adapter(self, adapter: Any) -> None:
         """Set the movement adapter for emotional expression.
@@ -360,7 +360,7 @@ class MovementManager:
         Called by openai_realtime.py after initialization to wire animal integration.
         
         Args:
-            adapter: MovementAdapter instance from animal_reachy_conversation
+            adapter: MovementAdapter instance from anima_reachy_conversation
         """
         self._movement_adapter = adapter
         logger.info("Movement adapter set for emotional expression")

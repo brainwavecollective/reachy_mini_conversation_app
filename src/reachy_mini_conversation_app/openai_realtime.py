@@ -16,8 +16,8 @@ from numpy.typing import NDArray
 from scipy.signal import resample
 from websockets.exceptions import ConnectionClosedError
 
-from animal import Anima, Config as AnimalConfig
-from animal_reachy_conversation import MovementAdapter
+from anima import Anima, Config as AnimaConfig
+from anima_reachy_conversation import MovementAdapter
 
 from reachy_mini_conversation_app.config import config
 from reachy_mini_conversation_app.prompts import get_session_voice, get_session_instructions
@@ -72,7 +72,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         self.partial_transcript_sequence: int = 0  # sequence counter to prevent stale emissions
         self.partial_debounce_delay = 0.5  # seconds
 
-        # Animal emotional engine integration
+        # Anima emotional engine integration
         self.anima: Optional[Anima] = None
         self.movement_adapter: Optional[MovementAdapter] = None
 
@@ -177,14 +177,14 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
         self.client = AsyncOpenAI(api_key=openai_api_key)
         
-        # Initialize Animal emotional engine
+        # Initialize Anima emotional engine
         try:
-            logger.info("Initializing Animal emotional engine...")
-            animal_config = AnimalConfig(
+            logger.info("Initializing Anima emotional engine...")
+            anima_config = AnimaConfig(
                 nrc_lexicon_path=config.AFFECT_ENGINE_DATA_PATH,
                 debug=False,
             )
-            self.anima = Anima(animal_config)
+            self.anima = Anima(anima_config)
             await self.anima.start()
             
             # Wire movement adapter
@@ -201,10 +201,10 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
             # ⭐ NEW: Wire adapter into MovementManager
             self.deps.movement_manager.set_movement_adapter(self.movement_adapter)
             
-            logger.info("✓ Animal emotional engine initialized")
+            logger.info("✓ Anima emotional engine initialized")
         except Exception as e:
-            logger.error(f"✗ Animal initialization failed: {e}")
-            raise RuntimeError(f"Animal emotional engine not available: {e}")
+            logger.error(f"✗ Anima initialization failed: {e}")
+            raise RuntimeError(f"Anima emotional engine not available: {e}")
 
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
@@ -381,12 +381,12 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
                     await self.output_queue.put(AdditionalOutputs({"role": "user", "content": event.transcript}))
 
-                # Handle assistant transcription - feed to Animal
+                # Handle assistant transcription - feed to Anima
                 if event.type in ("response.audio_transcript.done", "response.output_audio_transcript.done"):
                     logger.debug(f"Assistant transcript: {event.transcript}")
                     await self.output_queue.put(AdditionalOutputs({"role": "assistant", "content": event.transcript}))
                     
-                    # Feed transcript to Animal (fire-and-forget, non-blocking)
+                    # Feed transcript to Anima (fire-and-forget, non-blocking)
                     if self.anima is not None:
                         asyncio.create_task(self.anima.process_text(event.transcript))
 
@@ -571,13 +571,13 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         """Shutdown the handler."""
         self._shutdown_requested = True
         
-        # Shutdown Animal emotional engine
+        # Shutdown Anima emotional engine
         if self.anima is not None:
             try:
                 await self.anima.stop()
-                logger.info("Animal emotional engine stopped")
+                logger.info("Anima emotional engine stopped")
             except Exception as e:
-                logger.debug(f"Animal shutdown error: {e}")
+                logger.debug(f"Anima shutdown error: {e}")
         
         # Cancel any pending debounce task
         if self.partial_transcript_task and not self.partial_transcript_task.done():

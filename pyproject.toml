@@ -25,8 +25,8 @@ dependencies = [
     "eclipse-zenoh~=1.7.0",
     "gradio_client>=1.13.3",
     #Emotional Engine & Display
-    "animal @ git+ssh://git@github.com/brainwavecollective/animal.git",
-    "animal-reachy-conversation @ git+ssh://git@github.com/brainwavecollective/animal-reachy-conversation.git",
+    "anima-engine @ git+ssh://git@github.com/brainwavecollective/anima-engine.git",
+    "anima-reachy-conversation @ git+ssh://git@github.com/brainwavecollective/anima-reachy-conversation.git",
     #LED Eyes
     "reachy-eyes @ git+https://github.com/brainwavecollective/reachy-eyes.git",
 ]
