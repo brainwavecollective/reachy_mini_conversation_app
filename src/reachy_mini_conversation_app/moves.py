@@ -3,8 +3,8 @@
 Design overview
 - Primary moves (emotions, dances, goto, breathing) are mutually exclusive and run
   sequentially.
-- Secondary moves (speech sway, face tracking) are additive offsets applied on top
-  of the current primary pose.
+- Secondary moves (speech sway, face tracking, emotional offsets) are additive offsets 
+  applied on top of the current primary pose.
 - There is a single control point to the robot: `ReachyMini.set_target`.
 - The control loop runs near 100 Hz and is phase-aligned via a monotonic clock.
 - Idle behaviour starts an infinite `BreathingMove` after a short inactivity delay
@@ -36,7 +36,7 @@ import time
 import logging
 import threading
 from queue import Empty, Queue
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Optional, Callable
 from collections import deque
 from dataclasses import dataclass
 
@@ -69,6 +69,7 @@ class BreathingMove(Move):  # type: ignore
         interpolation_start_pose: NDArray[np.float32],
         interpolation_start_antennas: Tuple[float, float],
         interpolation_duration: float = 1.0,
+        antenna_params_provider: Optional[Callable[[], Tuple[float, float, float, float]]] = None,
     ):
         """Initialize breathing move.
 
@@ -76,6 +77,7 @@ class BreathingMove(Move):  # type: ignore
             interpolation_start_pose: 4x4 matrix of current head pose to interpolate from
             interpolation_start_antennas: Current antenna positions to interpolate from
             interpolation_duration: Duration of interpolation to neutral (seconds)
+            antenna_params_provider: Optional callback returning (left_base, right_base, amplitude_deg, frequency_hz)
 
         """
         self.interpolation_start_pose = interpolation_start_pose
@@ -89,8 +91,22 @@ class BreathingMove(Move):  # type: ignore
         # Breathing parameters
         self.breathing_z_amplitude = 0.005  # 5mm gentle breathing
         self.breathing_frequency = 0.1  # Hz (6 breaths per minute)
-        self.antenna_sway_amplitude = np.deg2rad(15)  # 15 degrees
-        self.antenna_frequency = 0.5  # Hz (faster antenna sway)
+        
+        # Antenna parameters
+        self._antenna_params_provider = antenna_params_provider
+        self._antenna_amp_rad_default = np.deg2rad(15.0)
+        self._antenna_freq_hz_default = 0.5
+        
+        # Phase tracking for continuous antenna motion
+        self._antenna_phase = 0.0
+        self._last_eval_time: Optional[float] = None
+        
+        # Smoothed parameters
+        self._current_amp = self._antenna_amp_rad_default
+        self._current_freq = self._antenna_freq_hz_default
+        self._current_left_base = 0.0
+        self._current_right_base = 0.0
+        self._param_smoothing = 0.1  # 0.05–0.2 is good range
 
     @property
     def duration(self) -> float:
@@ -122,9 +138,49 @@ class BreathingMove(Move):  # type: ignore
             z_offset = self.breathing_z_amplitude * np.sin(2 * np.pi * self.breathing_frequency * breathing_time)
             head_pose = create_head_pose(x=0, y=0, z=z_offset, roll=0, pitch=0, yaw=0, degrees=True, mm=False)
 
-            # Antenna sway (opposite directions)
-            antenna_sway = self.antenna_sway_amplitude * np.sin(2 * np.pi * self.antenna_frequency * breathing_time)
-            antennas = np.array([antenna_sway, -antenna_sway], dtype=np.float64)
+            # Get antenna parameters from provider (if available)
+            if self._antenna_params_provider is not None:
+                try:
+                    left_base, right_base, amp_deg, freq_hz = self._antenna_params_provider()
+                    target_left_base = float(left_base)
+                    target_right_base = float(right_base)
+                    target_amp = np.deg2rad(float(amp_deg))
+                    target_freq = float(freq_hz)
+                except Exception as e:
+                    logger.debug(f"Antenna params provider error: {e}, using defaults")
+                    target_left_base = 0.0
+                    target_right_base = 0.0
+                    target_amp = self._antenna_amp_rad_default
+                    target_freq = self._antenna_freq_hz_default
+            else:
+                target_left_base = 0.0
+                target_right_base = 0.0
+                target_amp = self._antenna_amp_rad_default
+                target_freq = self._antenna_freq_hz_default
+
+            # Smooth parameter transitions
+            alpha = self._param_smoothing
+            self._current_left_base += (target_left_base - self._current_left_base) * alpha
+            self._current_right_base += (target_right_base - self._current_right_base) * alpha
+            self._current_amp += (target_amp - self._current_amp) * alpha
+            self._current_freq += (target_freq - self._current_freq) * alpha
+
+            # Phase integration (continuous)
+            now = time.monotonic()
+            if self._last_eval_time is None:
+                self._last_eval_time = now
+
+            dt = now - self._last_eval_time
+            self._last_eval_time = now
+
+            self._antenna_phase += dt * self._current_freq * 2.0 * np.pi
+
+            # Apply base position + breathing sway
+            antenna_sway = self._current_amp * np.sin(self._antenna_phase)
+            antennas = np.array([
+                self._current_left_base + antenna_sway,
+                self._current_right_base - antenna_sway,  # Opposite direction
+            ], dtype=np.float64)
 
         # Return in official Move interface format: (head_pose, antennas_array, body_yaw)
         return (head_pose, antennas, 0.0)
@@ -176,20 +232,10 @@ class MovementState:
 
     # Secondary move state (offsets)
     speech_offsets: Tuple[float, float, float, float, float, float] = (
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
     )
     face_tracking_offsets: Tuple[float, float, float, float, float, float] = (
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
     )
 
     # Status flags
@@ -284,34 +330,40 @@ class MovementManager:
 
         # Cross-thread signalling
         self._command_queue: "Queue[Tuple[str, Any]]" = Queue()
+        
         self._speech_offsets_lock = threading.Lock()
         self._pending_speech_offsets: Tuple[float, float, float, float, float, float] = (
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         )
         self._speech_offsets_dirty = False
 
         self._face_offsets_lock = threading.Lock()
         self._pending_face_offsets: Tuple[float, float, float, float, float, float] = (
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         )
         self._face_offsets_dirty = False
 
         self._shared_state_lock = threading.Lock()
         self._shared_last_activity_time = self.state.last_activity_time
         self._shared_is_listening = self._is_listening
+        
         self._status_lock = threading.Lock()
         self._freq_stats = LoopFrequencyStats()
         self._freq_snapshot = LoopFrequencyStats()
+
+        # Emotional expression integration (set by openai_realtime.py)
+        self._movement_adapter: Optional[Any] = None  # Will be MovementAdapter from animal_reachy_conversation
+
+    def set_movement_adapter(self, adapter: Any) -> None:
+        """Set the movement adapter for emotional expression.
+        
+        Called by openai_realtime.py after initialization to wire animal integration.
+        
+        Args:
+            adapter: MovementAdapter instance from animal_reachy_conversation
+        """
+        self._movement_adapter = adapter
+        logger.info("Movement adapter set for emotional expression")
 
     def queue_move(self, move: Move) -> None:
         """Queue a primary move to run after the currently executing one.
@@ -508,10 +560,16 @@ class MovementManager:
                     self._breathing_active = True
                     self.state.update_activity()
 
+                    # Wire antenna params provider if movement adapter is available
+                    antenna_provider = None
+                    if self._movement_adapter is not None:
+                        antenna_provider = self._movement_adapter.get_antenna_params
+
                     breathing_move = BreathingMove(
                         interpolation_start_pose=current_head_pose,
                         interpolation_start_antennas=current_antennas,
                         interpolation_duration=1.0,
+                        antenna_params_provider=antenna_provider,
                     )
                     self.move_queue.append(breathing_move)
                     logger.debug("Started breathing after %.1fs of inactivity", idle_for)
@@ -562,8 +620,8 @@ class MovementManager:
         return primary_full_body_pose
 
     def _get_secondary_pose(self) -> FullBodyPose:
-        """Get the secondary full body pose from speech and face tracking offsets."""
-        # Combine speech sway offsets + face tracking offsets for secondary pose
+        """Get the secondary full body pose from speech, face tracking, and emotional offsets."""
+        # Start with speech + face tracking offsets
         secondary_offsets = [
             self.state.speech_offsets[0] + self.state.face_tracking_offsets[0],
             self.state.speech_offsets[1] + self.state.face_tracking_offsets[1],
@@ -572,6 +630,31 @@ class MovementManager:
             self.state.speech_offsets[4] + self.state.face_tracking_offsets[4],
             self.state.speech_offsets[5] + self.state.face_tracking_offsets[5],
         ]
+
+        # Add emotional offsets if adapter is available
+        antenna_left_offset = 0.0
+        antenna_right_offset = 0.0
+        body_yaw_offset = 0.0
+        
+        if self._movement_adapter is not None:
+            try:
+                motion = self._movement_adapter._current_motion
+                # Add head offsets
+                secondary_offsets[0] += motion.head_x
+                secondary_offsets[1] += motion.head_y
+                secondary_offsets[2] += motion.head_z
+                secondary_offsets[3] += motion.head_roll
+                secondary_offsets[4] += motion.head_pitch
+                secondary_offsets[5] += motion.head_yaw
+                
+                # Add antenna base offsets
+                antenna_left_offset = motion.antenna_left_base
+                antenna_right_offset = motion.antenna_right_base
+                
+                # Add body yaw offset
+                body_yaw_offset = motion.body_yaw
+            except Exception as e:
+                logger.debug(f"Failed to get emotional offsets: {e}")
 
         secondary_head_pose = create_head_pose(
             x=secondary_offsets[0],
@@ -583,7 +666,12 @@ class MovementManager:
             degrees=False,
             mm=False,
         )
-        return (secondary_head_pose, (0.0, 0.0), 0.0)
+        
+        return (
+            secondary_head_pose,
+            (antenna_left_offset, antenna_right_offset),
+            body_yaw_offset,
+        )
 
     def _compose_full_body_pose(self, current_time: float) -> FullBodyPose:
         """Compose primary and secondary poses into a single command pose."""

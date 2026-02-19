@@ -198,6 +198,9 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
             # Subscribe adapter to anima
             self.anima.subscribe(self.movement_adapter.update)
             
+            # ⭐ NEW: Wire adapter into MovementManager
+            self.deps.movement_manager.set_movement_adapter(self.movement_adapter)
+            
             logger.info("✓ Animal emotional engine initialized")
         except Exception as e:
             logger.error(f"✗ Animal initialization failed: {e}")
