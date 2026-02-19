@@ -112,7 +112,11 @@ class Config:
         str(Path(__file__).resolve().parents[2] / "data" / "NRC-VAD-Lexicon-v2.1" / "NRC-VAD-Lexicon-v2.1.txt"),
     )
     
-    ANIMA_SIGMA: float = float(os.getenv("ANIMA_SIGMA", "0.25"))
+    ANIMA_TRANSITION_SIGMA: float = float(os.getenv("ANIMA_TRANSITION_SIGMA", "0.17"))
+
+    # Behavior baseline
+    ANTENNA_BASE_AMPLITUDE: float = float(os.getenv("ANTENNA_BASE_AMPLITUDE", "15.0"))
+    ANTENNA_BASE_FREQUENCY: float = float(os.getenv("ANTENNA_BASE_FREQUENCY", "0.5"))
 
     # Optional
     MODEL_NAME = os.getenv("MODEL_NAME", "gpt-realtime")

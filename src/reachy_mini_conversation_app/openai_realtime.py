@@ -187,18 +187,18 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
             self.anima = Anima(anima_config)
             await self.anima.start()
             
-            # Wire movement adapter
+            # Setup movement adapter
             self.movement_adapter = MovementAdapter(
                 self.deps.movement_manager,
-                base_antenna_amplitude=15.0,
-                base_antenna_frequency=0.5,
-                sigma=0.25,
+                base_antenna_amplitude=config.ANTENNA_BASE_AMPLITUDE,
+                base_antenna_frequency=config.ANTENNA_BASE_FREQUENCY,
+                sigma=config.ANIMA_TRANSITION_SIGMA,
             )
             
             # Subscribe adapter to anima
             self.anima.subscribe(self.movement_adapter.update)
             
-            # ⭐ NEW: Wire adapter into MovementManager
+            # Wire adapter into MovementManager
             self.deps.movement_manager.set_movement_adapter(self.movement_adapter)
             
             logger.info("✓ Anima emotional engine initialized")
