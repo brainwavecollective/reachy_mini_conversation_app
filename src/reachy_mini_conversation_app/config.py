@@ -115,7 +115,7 @@ class Config:
     ANIMA_TRANSITION_SIGMA: float = float(os.getenv("ANIMA_TRANSITION_SIGMA", "0.17"))
     ANIMA_VADCC_EXPONENT: float = float(os.getenv("ANIMA_VADCC_EXPONENT", "0.75"))
 
-    # Behavior baseline
+    # Behavior baseline for breathing, speech sway, and idle antenna motion
     ANTENNA_BASE_AMPLITUDE: float = float(os.getenv("ANTENNA_BASE_AMPLITUDE", "15.0"))
     ANTENNA_BASE_FREQUENCY: float = float(os.getenv("ANTENNA_BASE_FREQUENCY", "0.75"))
 

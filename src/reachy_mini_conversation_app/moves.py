@@ -50,6 +50,8 @@ from reachy_mini.utils.interpolation import (
     compose_world_offset,
     linear_pose_interpolation,
 )
+from reachy_mini.config import config
+
 
 
 logger = logging.getLogger(__name__)
@@ -94,9 +96,10 @@ class BreathingMove(Move):  # type: ignore
         
         # Antenna parameters
         self._antenna_params_provider = antenna_params_provider
-        self._antenna_amp_rad_default = np.deg2rad(15.0)
-        self._antenna_freq_hz_default = 0.5
-        
+        self._antenna_amp_rad_default = np.deg2rad(config.ANTENNA_BASE_AMPLITUDE)
+        self._antenna_freq_hz_default = config.ANTENNA_BASE_FREQUENCY
+       
+       
         # Phase tracking for continuous antenna motion
         self._antenna_phase = 0.0
         self._last_eval_time: Optional[float] = None
@@ -353,6 +356,13 @@ class MovementManager:
 
         # Emotional expression integration (set by openai_realtime.py)
         self._movement_adapter: Optional[Any] = None  # Will be MovementAdapter from anima_reachy_conversation
+        
+        # Antenna defaults for speech (same as breathing)
+        self._speech_antenna_amp_rad = np.deg2rad(config.ANTENNA_BASE_AMPLITUDE)
+        self._speech_antenna_freq_hz = config.ANTENNA_BASE_FREQUENCY
+
+        self._speech_antenna_phase = 0.0
+        self._speech_antenna_phase_time = self._now()
 
     def set_movement_adapter(self, adapter: Any) -> None:
         """Set the movement adapter for emotional expression.
@@ -397,6 +407,10 @@ class MovementManager:
         aware of manual motions. Thread-safe via the command queue.
         """
         self._command_queue.put(("set_moving_state", duration))
+
+    def set_speech_antenna_params(self, amp_deg: float, freq_hz: float) -> None:
+        self._speech_antenna_amp_rad = np.deg2rad(amp_deg)
+        self._speech_antenna_freq_hz = freq_hz
 
     def is_idle(self) -> bool:
         """Return True when the robot has been inactive longer than the idle delay."""
