@@ -167,7 +167,7 @@ wheels = [
 [[package]]
 name = "anima-engine"
 version = "0.0.1"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../anima-engine" }
 dependencies = [
     { name = "datasets" },
     { name = "huggingface-hub" },
@@ -177,22 +177,40 @@ dependencies = [
     { name = "textstat" },
     { name = "transformers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/08/a0/b2dcaf62b5332a1723119c6013b61f54bad68eb5e6084e06557050d1f3ad/anima_engine-0.0.1.tar.gz", hash = "sha256:4876c2467318f991245c9f67499a7565f994b886bd9ddb09d7991372f11fe18d", size = 137244, upload-time = "2026-02-19T04:59:18.344Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2e/36/7cff86a992aadfee6a59676e672247170dce32b2ef7961997d27e99df126/anima_engine-0.0.1-py3-none-any.whl", hash = "sha256:8526c33b50e4c1967730e83a1474b454a21944d6933ee299d8b23c63fc655747", size = 18563, upload-time = "2026-02-19T04:59:17.072Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "datasets", specifier = ">=2.0.0" },
+    { name = "huggingface-hub", specifier = ">=1.4.0" },
+    { name = "nltk", specifier = ">=3.8.1" },
+    { name = "numpy", specifier = ">=2.2.0" },
+    { name = "ollama", marker = "extra == 'anchor'", specifier = ">=0.1.7" },
+    { name = "sentence-transformers", specifier = ">=5.2.0" },
+    { name = "textstat", specifier = ">=0.7.3" },
+    { name = "transformers", specifier = ">=5.1.0" },
 ]
+provides-extras = ["anchor"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "build", specifier = ">=1.4.0" }]
 
 [[package]]
 name = "anima-reachy-conversation"
 version = "0.0.1"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../anima-reachy-conversation" }
 dependencies = [
     { name = "anima-engine" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/08/02/52363f0791a8ec78e0ba2195c6ea6cb9d26512e062c8f21be23300800b26/anima_reachy_conversation-0.0.1.tar.gz", hash = "sha256:12b4c2b66b49dc45e881da1f6c4b8ce8f9e43485ab1a070d16de1bfb80f9f928", size = 7669, upload-time = "2026-02-19T05:09:57.723Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/04/582511d424dcc8ca95ae42eeccc0d3e83fcdbf9fc968a71e22fd79d43276/anima_reachy_conversation-0.0.1-py3-none-any.whl", hash = "sha256:836cf72c8cfecfe7bdf444d9ac8c3637dce9e9d7066ab486ff46ff865a56ce5e", size = 7636, upload-time = "2026-02-19T05:09:56.761Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "anima-engine" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0" },
 ]
+provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "build", specifier = ">=1.4.0" }]
 
 [[package]]
 name = "annotated-doc"
@@ -3405,8 +3423,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiortc", specifier = ">=1.13.0" },
-    { name = "anima-engine" },
-    { name = "anima-reachy-conversation" },
+    { name = "anima-engine", editable = "../anima-engine" },
+    { name = "anima-reachy-conversation", editable = "../anima-reachy-conversation" },
     { name = "eclipse-zenoh", specifier = "~=1.7.0" },
     { name = "fastrtc", specifier = ">=0.0.34" },
     { name = "gradio", specifier = "==5.50.1.dev1" },

@@ -639,6 +639,15 @@ class MovementManager:
         if self._movement_adapter is not None:
             try:
                 motion = self._movement_adapter._current_motion
+                now = self._now()
+                new_offsets = (round(motion.head_z, 4), round(motion.head_pitch, 4), round(motion.antenna_left_base, 4))
+                last_offsets = getattr(self, '_last_logged_offsets', None)
+                last_log_time = getattr(self, '_last_offset_log_time', 0.0)
+                if new_offsets != last_offsets and (now - last_log_time) >= 1.0:
+                    logger.debug(f"[MOVES] Emotional offsets changed: head_z={motion.head_z:.4f}, pitch={motion.head_pitch:.4f}, ant_left={motion.antenna_left_base:.4f}")
+                    self._last_logged_offsets = new_offsets
+                    self._last_offset_log_time = now
+
                 # Add head offsets
                 secondary_offsets[0] += motion.head_x
                 secondary_offsets[1] += motion.head_y

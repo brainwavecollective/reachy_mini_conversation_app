@@ -106,10 +106,13 @@ class Config:
     # Required
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # The key is downloaded in console.py if needed
 
-    AFFECT_ENGINE_DATA_PATH: str = os.getenv(
-        "AFFECT_ENGINE_DATA_PATH",
+    # Anima 
+    ANIMA_DATA_PATH: str = os.getenv(
+        "ANIMA_DATA_PATH",
         str(Path(__file__).resolve().parents[2] / "data" / "NRC-VAD-Lexicon-v2.1" / "NRC-VAD-Lexicon-v2.1.txt"),
     )
+    
+    ANIMA_SIGMA: float = float(os.getenv("ANIMA_SIGMA", "0.25"))
 
     # Optional
     MODEL_NAME = os.getenv("MODEL_NAME", "gpt-realtime")

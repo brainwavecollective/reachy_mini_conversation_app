@@ -133,3 +133,7 @@ ignore_missing_imports = true
 strict = true
 show_error_codes = true
 warn_unused_ignores = true
+
+[tool.uv.sources]
+anima-reachy-conversation = { path = "../anima-reachy-conversation", editable = true }
+anima-engine = { path = "../anima-engine", editable = true }

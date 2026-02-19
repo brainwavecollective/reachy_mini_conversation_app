@@ -181,8 +181,8 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         try:
             logger.info("Initializing Anima emotional engine...")
             anima_config = AnimaConfig(
-                nrc_lexicon_path=config.AFFECT_ENGINE_DATA_PATH,
-                debug=False,
+                nrc_lexicon_path=config.ANIMA_DATA_PATH,
+                debug=logging.getLogger().isEnabledFor(logging.DEBUG),
             )
             self.anima = Anima(anima_config)
             await self.anima.start()
@@ -385,10 +385,12 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 if event.type in ("response.audio_transcript.done", "response.output_audio_transcript.done"):
                     logger.debug(f"Assistant transcript: {event.transcript}")
                     await self.output_queue.put(AdditionalOutputs({"role": "assistant", "content": event.transcript}))
-                    
-                    # Feed transcript to Anima (fire-and-forget, non-blocking)
+
                     if self.anima is not None:
+                        logger.info(f"[ANIMA] Feeding transcript to Anima: '{event.transcript[:80]}...'")
                         asyncio.create_task(self.anima.process_text(event.transcript))
+                    else:
+                        logger.warning("[ANIMA] anima is None — skipping process_text")
 
                 # Handle audio delta
                 if event.type in ("response.audio.delta", "response.output_audio.delta"):
