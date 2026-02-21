@@ -3,7 +3,7 @@
 Design overview
 - Primary moves (emotions, dances, goto, breathing) are mutually exclusive and run
   sequentially.
-- Secondary moves (speech sway, face tracking, emotional offsets) are additive offsets 
+- Secondary moves (speech sway, face tracking, emotional offsets) are additive offsets
   applied on top of the current primary pose.
 - There is a single control point to the robot: `ReachyMini.set_target`.
 - The control loop runs near 100 Hz and is phase-aligned via a monotonic clock.
@@ -29,9 +29,20 @@ Safety
 - Listening freezes antennas, then blends them back on unfreeze.
 - Interpolations and blends are used to avoid jumps at all times.
 - `set_target` errors are rate-limited in logs.
+
+Telemetry
+- A ring-buffer based CSV telemetry system captures behavioral analytics at a
+  tunable sample rate (default 10 Hz, controlled via TELEMETRY_SAMPLE_RATE_HZ).
+- Motor readbacks are sampled at a further-reduced rate (default 5 Hz).
+- All I/O is decoupled to a background drain thread; the control loop only does
+  a single ring-buffer push per sample tick.
+- Anima VADCC + baseline are fed in via set_anima_state() from the Anima subscriber.
+- See telemetry.py and logging_setup.py for full details.
 """
 
 from __future__ import annotations
+
+import math
 import time
 import logging
 import threading
@@ -52,6 +63,9 @@ from reachy_mini.utils.interpolation import (
 )
 
 from reachy_mini_conversation_app.config import config
+from reachy_mini_conversation_app.ik_workspace import IKWorkspace
+from reachy_mini_conversation_app.telemetry import TelemetryWriter, build_record
+from reachy_mini_conversation_app.logging_setup import get_telemetry_path
 
 
 logger = logging.getLogger(__name__)
@@ -79,8 +93,8 @@ class BreathingMove(Move):  # type: ignore
             interpolation_start_pose: 4x4 matrix of current head pose to interpolate from
             interpolation_start_antennas: Current antenna positions to interpolate from
             interpolation_duration: Duration of interpolation to neutral (seconds)
-            antenna_params_provider: Optional callback returning (left_base, right_base, amplitude_deg, frequency_hz)
-
+            antenna_params_provider: Optional callback returning
+                (left_base, right_base, amplitude_deg, frequency_hz)
         """
         self.interpolation_start_pose = interpolation_start_pose
         self.interpolation_start_antennas = np.array(interpolation_start_antennas)
@@ -92,19 +106,19 @@ class BreathingMove(Move):  # type: ignore
 
         # Breathing parameters
         self.breathing_z_amplitude = 0.005  # 5mm gentle breathing
-        self.breathing_frequency = 0.1  # Hz (6 breaths per minute)
-        
+        self.breathing_frequency = 0.1      # Hz (6 breaths per minute)
+
         # Antenna parameters
         self._antenna_params_provider = antenna_params_provider
         self._antenna_amp_rad_default = np.deg2rad(config.ANTENNA_BASE_AMPLITUDE)
         self._antenna_freq_hz_default = config.ANTENNA_BASE_FREQUENCY
-       
+
         self._last_breath_log_time = 0.0
 
         # Phase tracking for continuous antenna motion
         self._antenna_phase = 0.0
         self._last_eval_time: Optional[float] = None
-        
+
         # Smoothed parameters
         self._current_amp = self._antenna_amp_rad_default
         self._current_freq = self._antenna_freq_hz_default
@@ -123,12 +137,10 @@ class BreathingMove(Move):  # type: ignore
             # Phase 1: Interpolate to neutral base position
             interpolation_t = t / self.interpolation_duration
 
-            # Interpolate head pose
             head_pose = linear_pose_interpolation(
                 self.interpolation_start_pose, self.neutral_head_pose, interpolation_t,
             )
 
-            # Interpolate antennas
             antennas_interp = (
                 1 - interpolation_t
             ) * self.interpolation_start_antennas + interpolation_t * self.neutral_antennas
@@ -138,8 +150,9 @@ class BreathingMove(Move):  # type: ignore
             # Phase 2: Breathing patterns from neutral base
             breathing_time = t - self.interpolation_duration
 
-            # Gentle z-axis breathing
-            z_offset = self.breathing_z_amplitude * np.sin(2 * np.pi * self.breathing_frequency * breathing_time)
+            z_offset = self.breathing_z_amplitude * np.sin(
+                2 * np.pi * self.breathing_frequency * breathing_time
+            )
             head_pose = create_head_pose(x=0, y=0, z=z_offset, roll=0, pitch=0, yaw=0, degrees=True, mm=False)
 
             # Get antenna parameters from provider (if available)
@@ -178,7 +191,6 @@ class BreathingMove(Move):  # type: ignore
                 )
                 self._last_breath_log_time = now
 
-
             # Phase integration (continuous)
             now = time.monotonic()
             if self._last_eval_time is None:
@@ -209,17 +221,12 @@ def combine_full_body(primary_pose: FullBodyPose, secondary_pose: FullBodyPose) 
 
     Returns:
         Combined full body pose (head_pose, antennas, body_yaw)
-
     """
     primary_head, primary_antennas, primary_body_yaw = primary_pose
     secondary_head, secondary_antennas, secondary_body_yaw = secondary_pose
 
-    # Combine head poses using compose_world_offset; the secondary pose must be an
-    # offset expressed in the world frame (T_off_world) applied to the absolute
-    # primary transform (T_abs).
     combined_head = compose_world_offset(primary_head, secondary_head, reorthonormalize=True)
 
-    # Sum antennas and body_yaw
     combined_antennas = (
         primary_antennas[0] + secondary_antennas[0],
         primary_antennas[1] + secondary_antennas[1],
@@ -233,6 +240,22 @@ def clone_full_body_pose(pose: FullBodyPose) -> FullBodyPose:
     """Create a deep copy of a full body pose tuple."""
     head, antennas, body_yaw = pose
     return (head.copy(), (float(antennas[0]), float(antennas[1])), float(body_yaw))
+
+
+def _extract_euler_from_pose(pose: NDArray) -> Tuple[float, float, float, float]:
+    """Extract z translation and roll/pitch/yaw from a 4x4 pose matrix.
+
+    Returns:
+        (head_z, head_pitch, head_roll, head_yaw) all in metres/radians
+    """
+    try:
+        head_z = float(pose[2, 3])
+        head_pitch = float(math.asin(max(-1.0, min(1.0, -pose[2, 0]))))
+        head_roll = float(math.atan2(pose[2, 1], pose[2, 2]))
+        head_yaw = float(math.atan2(pose[1, 0], pose[0, 0]))
+        return head_z, head_pitch, head_roll, head_yaw
+    except Exception:
+        return 0.0, 0.0, 0.0, 0.0
 
 
 @dataclass
@@ -293,7 +316,7 @@ class MovementManager:
     Timing:
     - All elapsed-time calculations rely on `time.monotonic()` through `self._now`
       to avoid wall-clock jumps.
-    - The loop attempts 100 Hz
+    - The loop attempts 100 Hz.
 
     Concurrency:
     - External threads communicate via `_command_queue` messages.
@@ -344,7 +367,7 @@ class MovementManager:
 
         # Cross-thread signalling
         self._command_queue: "Queue[Tuple[str, Any]]" = Queue()
-        
+
         self._speech_offsets_lock = threading.Lock()
         self._pending_speech_offsets: Tuple[float, float, float, float, float, float] = (
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -360,29 +383,78 @@ class MovementManager:
         self._shared_state_lock = threading.Lock()
         self._shared_last_activity_time = self.state.last_activity_time
         self._shared_is_listening = self._is_listening
-        
+
         self._status_lock = threading.Lock()
         self._freq_stats = LoopFrequencyStats()
         self._freq_snapshot = LoopFrequencyStats()
 
         # Emotional expression integration (set by openai_realtime.py)
-        self._movement_adapter: Optional[Any] = None  # Will be MovementAdapter from anima_reachy_conversation
-        
+        self._movement_adapter: Optional[Any] = None  # MovementAdapter from anima_reachy_conversation
+
+        self._ik_workspace = IKWorkspace()
+        self._last_hull_log_time = 0.0
+
+        # ------------------------------------------------------------------ #
+        # Telemetry                                                            #
+        # ------------------------------------------------------------------ #
+        telemetry_cfg = config.telemetry  # TelemetryConfig on AppConfig
+        self._telemetry_enabled: bool = telemetry_cfg.enabled
+        # How many 100 Hz ticks between telemetry samples (e.g. 10 @ 100 Hz = 10 Hz)
+        self._telemetry_sample_every: int = max(
+            1, round(CONTROL_LOOP_FREQUENCY_HZ / max(1e-3, telemetry_cfg.sample_rate_hz))
+        )
+        # Motor readbacks at half the telemetry rate by default (cheaper)
+        self._motor_sample_every: int = self._telemetry_sample_every * 2
+        self._telemetry_writer: Optional[TelemetryWriter] = None
+        self._telemetry_loop_start: float = self._now()  # elapsed-time anchor
+
+        # Anima state — written by set_anima_state() from outside the loop thread,
+        # read inside the loop.  Tuple assignment is atomic under the GIL.
+        self._last_vadcc: tuple = (0.5, 0.5, 0.5, 0.5, 0.5)
+        self._last_baseline: tuple = (0.5, 0.5, 0.5, 0.5, 0.5)
+        self._last_burst_influence: Optional[float] = None
+
+    # ------------------------------------------------------------------ #
+    # Telemetry public API                                                 #
+    # ------------------------------------------------------------------ #
+
+    def set_anima_state(
+        self,
+        vadcc: tuple,
+        baseline: tuple,
+        burst_influence: Optional[float] = None,
+    ) -> None:
+        """Receive current Anima VADCC state for telemetry capture.
+
+        Called by the Anima subscriber (openai_realtime.py or similar) whenever
+        VADCC updates.  Thread-safe via GIL-protected tuple assignment.
+
+        Args:
+            vadcc: Current 5-tuple (V, A, D, Cx, Ch) from Anima engine
+            baseline: Current 5-tuple slow baseline from Blend
+            burst_influence: Influence scalar from the most recent burst, or None
+        """
+        self._last_vadcc = vadcc
+        self._last_baseline = baseline
+        if burst_influence is not None:
+            self._last_burst_influence = burst_influence
+
+    # ------------------------------------------------------------------ #
+    # Lifecycle                                                            #
+    # ------------------------------------------------------------------ #
+
     def set_movement_adapter(self, adapter: Any) -> None:
         """Set the movement adapter for emotional expression.
-        
+
         Called by openai_realtime.py after initialization to wire anima integration.
-        
+
         Args:
             adapter: MovementAdapter instance from anima_reachy_conversation
         """
-        
-        # Force breathing rebuild so it picks up provider
+        # Force breathing rebuild so it picks up the new antenna provider
         self._command_queue.put(("clear_queue", None))
-        
         self._movement_adapter = adapter
         logger.info("Movement adapter set for emotional expression")
-        
 
     def queue_move(self, move: Move) -> None:
         """Queue a primary move to run after the currently executing one.
@@ -442,6 +514,79 @@ class MovementManager:
             if self._shared_is_listening == listening:
                 return
         self._command_queue.put(("set_listening", listening))
+
+    def start(self) -> None:
+        """Start the worker thread that drives the 100 Hz control loop."""
+        if self._thread is not None and self._thread.is_alive():
+            logger.warning("Move worker already running; start() ignored")
+            return
+
+        # Start telemetry writer if enabled
+        if self._telemetry_enabled:
+            try:
+                csv_path = get_telemetry_path()
+                self._telemetry_writer = TelemetryWriter(
+                    output_path=csv_path,
+                    drain_interval_s=config.telemetry.drain_interval_s,
+                    buffer_capacity=config.telemetry.buffer_capacity,
+                )
+                self._telemetry_writer.start()
+                self._telemetry_loop_start = self._now()
+            except Exception as e:
+                logger.error("Failed to start telemetry writer: %s — telemetry disabled", e)
+                self._telemetry_enabled = False
+                self._telemetry_writer = None
+
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self.working_loop, daemon=True)
+        self._thread.start()
+        logger.debug("Move worker started")
+
+    def stop(self) -> None:
+        """Request the worker thread to stop and wait for it to exit.
+
+        Before stopping, resets the robot to a neutral position.
+        """
+        if self._thread is None or not self._thread.is_alive():
+            logger.debug("Move worker not running; stop() ignored")
+            return
+
+        logger.info("Stopping movement manager and resetting to neutral position...")
+
+        # Clear any queued moves and stop current move
+        self.clear_move_queue()
+
+        # Stop the worker thread first so it doesn't interfere
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join()
+            self._thread = None
+        logger.debug("Move worker stopped")
+
+        # Stop telemetry (flushes remaining records before closing)
+        if self._telemetry_writer is not None:
+            self._telemetry_writer.stop()
+            self._telemetry_writer = None
+
+        # Reset to neutral position
+        try:
+            neutral_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
+            neutral_antennas = [0.0, 0.0]
+            neutral_body_yaw = 0.0
+
+            self.current_robot.goto_target(
+                head=neutral_head_pose,
+                antennas=neutral_antennas,
+                duration=2.0,
+                body_yaw=neutral_body_yaw,
+            )
+            logger.info("Reset to neutral position completed")
+        except Exception as e:
+            logger.error(f"Failed to reset to neutral position: {e}")
+
+    # ------------------------------------------------------------------ #
+    # Internal signal handling                                            #
+    # ------------------------------------------------------------------ #
 
     def _poll_signals(self, current_time: float) -> None:
         """Apply queued commands and pending offset updates."""
@@ -505,7 +650,7 @@ class MovementManager:
             logger.info("Cleared move queue and stopped current move")
         elif command == "set_moving_state":
             try:
-                duration = float(payload)
+                float(payload)
             except (TypeError, ValueError):
                 logger.warning("Invalid moving state duration: %s", payload)
                 return
@@ -544,6 +689,10 @@ class MovementManager:
             self._shared_last_activity_time = self.state.last_activity_time
             self._shared_is_listening = self._is_listening
 
+    # ------------------------------------------------------------------ #
+    # Primary move management                                             #
+    # ------------------------------------------------------------------ #
+
     def _manage_move_queue(self, current_time: float) -> None:
         """Manage the primary move queue (sequential execution)."""
         if self.state.current_move is None or (
@@ -556,7 +705,6 @@ class MovementManager:
             if self.move_queue:
                 self.state.current_move = self.move_queue.popleft()
                 self.state.move_start_time = current_time
-                # Any real move cancels breathing mode flag
                 self._breathing_active = isinstance(self.state.current_move, BreathingMove)
                 logger.debug(f"Starting new move, duration: {self.state.current_move.duration}s")
 
@@ -571,15 +719,14 @@ class MovementManager:
             idle_for = current_time - self.state.last_activity_time
             if idle_for >= self.idle_inactivity_delay:
                 try:
-                    # These 2 functions return the latest available sensor data from the robot, but don't perform I/O synchronously.
-                    # Therefore, we accept calling them inside the control loop.
+                    # These 2 functions return the latest available sensor data from the
+                    # robot but don't perform I/O synchronously; acceptable in the loop.
                     _, current_antennas = self.current_robot.get_current_joint_positions()
                     current_head_pose = self.current_robot.get_current_head_pose()
 
                     self._breathing_active = True
                     self.state.update_activity()
 
-                    # Wire antenna params provider if movement adapter is available
                     antenna_provider = None
                     if self._movement_adapter is not None:
                         antenna_provider = self._movement_adapter.get_antenna_params
@@ -605,9 +752,12 @@ class MovementManager:
         if self.state.current_move is not None and not isinstance(self.state.current_move, BreathingMove):
             self._breathing_active = False
 
+    # ------------------------------------------------------------------ #
+    # Pose composition                                                    #
+    # ------------------------------------------------------------------ #
+
     def _get_primary_pose(self, current_time: float) -> FullBodyPose:
         """Get the primary full body pose from current move or neutral."""
-        # When a primary move is playing, sample it and cache the resulting pose
         if self.state.current_move is not None and self.state.move_start_time is not None:
             move_time = current_time - self.state.move_start_time
             head, antennas, body_yaw = self.state.current_move.evaluate(move_time)
@@ -621,14 +771,9 @@ class MovementManager:
 
             antennas_tuple = (float(antennas[0]), float(antennas[1]))
             head_copy = head.copy()
-            primary_full_body_pose = (
-                head_copy,
-                antennas_tuple,
-                float(body_yaw),
-            )
-
+            primary_full_body_pose = (head_copy, antennas_tuple, float(body_yaw))
             self.state.last_primary_pose = clone_full_body_pose(primary_full_body_pose)
-        # Otherwise reuse the last primary pose so we avoid jumps between moves
+
         elif self.state.last_primary_pose is not None:
             primary_full_body_pose = clone_full_body_pose(self.state.last_primary_pose)
         else:
@@ -640,7 +785,6 @@ class MovementManager:
 
     def _get_secondary_pose(self) -> FullBodyPose:
         """Get the secondary full body pose from speech, face tracking, and emotional offsets."""
-        # Start with speech + face tracking offsets
         secondary_offsets = [
             self.state.speech_offsets[0] + self.state.face_tracking_offsets[0],
             self.state.speech_offsets[1] + self.state.face_tracking_offsets[1],
@@ -650,38 +794,36 @@ class MovementManager:
             self.state.speech_offsets[5] + self.state.face_tracking_offsets[5],
         ]
 
-        # Add emotional offsets if adapter is available
-        #antenna_left_offset = 0.0
-        #antenna_right_offset = 0.0
         body_yaw_offset = 0.0
-        
+
         if self._movement_adapter is not None:
             try:
                 motion = self._movement_adapter.get_body_motion()
-                now = self._now()
-                new_offsets = (round(motion.head_z, 4), round(motion.head_pitch, 4), round(motion.antenna_left_base, 4))
-                last_offsets = getattr(self, '_last_logged_offsets', None)
-                last_log_time = getattr(self, '_last_offset_log_time', 0.0)
-                if new_offsets != last_offsets and (now - last_log_time) >= 1.0:
-                    logger.debug(f"[MOVES] Emotional offsets changed: head_z={motion.head_z:.4f}, pitch={motion.head_pitch:.4f}, ant_left={motion.antenna_left_base:.4f}, ant_right={motion.antenna_right_base:.4f}")
-                    
-                    self._last_logged_offsets = new_offsets
-                    self._last_offset_log_time = now
 
-                # Add head offsets
                 secondary_offsets[0] += motion.head_x
                 secondary_offsets[1] += motion.head_y
                 secondary_offsets[2] += motion.head_z
                 secondary_offsets[3] += motion.head_roll
                 secondary_offsets[4] += motion.head_pitch
                 secondary_offsets[5] += motion.head_yaw
-                
-                # Antenna base offsets
-                #antenna_left_offset = motion.antenna_left_base
-                #antenna_right_offset = motion.antenna_right_base
-                
-                # Add body yaw offset
+
                 body_yaw_offset = motion.body_yaw
+
+                # Workspace observation (1 Hz, no clamping)
+                now = self._now()
+                if now - self._last_hull_log_time >= 1.0:
+                    self._last_hull_log_time = now
+                    self._ik_workspace.log_observation(
+                        z=secondary_offsets[2],
+                        pitch=secondary_offsets[4],
+                        roll=secondary_offsets[3],
+                        yaw=secondary_offsets[5],
+                        emotional_z=motion.head_z,
+                        emotional_pitch=motion.head_pitch,
+                        emotional_roll=motion.head_roll,
+                        emotional_yaw=motion.head_yaw,
+                    )
+
             except Exception as e:
                 logger.debug(f"Failed to get emotional offsets: {e}")
 
@@ -695,13 +837,8 @@ class MovementManager:
             degrees=False,
             mm=False,
         )
-        
-        return (
-            secondary_head_pose,
-            (0.0, 0.0),
-            body_yaw_offset,
-        )
 
+        return (secondary_head_pose, (0.0, 0.0), body_yaw_offset)
 
     def _compose_full_body_pose(self, current_time: float) -> FullBodyPose:
         """Compose primary and secondary poses into a single command pose."""
@@ -713,6 +850,10 @@ class MovementManager:
         """Advance queue state and idle behaviours for this tick."""
         self._manage_move_queue(current_time)
         self._manage_breathing(current_time)
+
+    # ------------------------------------------------------------------ #
+    # Antenna freeze / blend                                              #
+    # ------------------------------------------------------------------ #
 
     def _calculate_blended_antennas(self, target_antennas: Tuple[float, float]) -> Tuple[float, float]:
         """Blend target antennas with listening freeze state and update blending."""
@@ -750,7 +891,16 @@ class MovementManager:
 
         return antennas_cmd
 
-    def _issue_control_command(self, head: NDArray[np.float32], antennas: Tuple[float, float], body_yaw: float) -> None:
+    # ------------------------------------------------------------------ #
+    # Robot command                                                       #
+    # ------------------------------------------------------------------ #
+
+    def _issue_control_command(
+        self,
+        head: NDArray[np.float32],
+        antennas: Tuple[float, float],
+        body_yaw: float,
+    ) -> None:
         """Send the fused pose to the robot with throttled error logging."""
         try:
             self.current_robot.set_target(head=head, antennas=antennas, body_yaw=body_yaw)
@@ -769,8 +919,136 @@ class MovementManager:
             with self._status_lock:
                 self._last_commanded_pose = clone_full_body_pose((head, antennas, body_yaw))
 
+    # ------------------------------------------------------------------ #
+    # Telemetry capture                                                   #
+    # ------------------------------------------------------------------ #
+
+    def _maybe_capture_telemetry(
+        self,
+        loop_count: int,
+        loop_start: float,
+        commanded_head: NDArray,
+        commanded_antennas: Tuple[float, float],
+        commanded_body_yaw: float,
+    ) -> None:
+        """Capture one telemetry sample if this is a sample tick.
+
+        Called at the end of working_loop after _issue_control_command.
+        Only executes every _telemetry_sample_every ticks; motor readback
+        happens at the further-reduced _motor_sample_every rate.
+        All work is O(1); the ring-buffer push is the only allocation-adjacent
+        operation and it never blocks.
+        """
+        if not self._telemetry_enabled or self._telemetry_writer is None:
+            return
+        if self._movement_adapter is None:
+            return
+        if loop_count % self._telemetry_sample_every != 0:
+            return
+
+        # ---- Optional motor readback (reduced rate) ----
+        actual_ant_left: Optional[float] = None
+        actual_ant_right: Optional[float] = None
+        actual_head_z: Optional[float] = None
+        actual_head_pitch: Optional[float] = None
+        actual_head_roll: Optional[float] = None
+        actual_head_yaw: Optional[float] = None
+        actual_body_yaw: Optional[float] = None
+
+        ik_failed: bool = False
+        try:
+            ik_failed = self.current_robot.client.get_ik_failed()
+        except Exception:
+            pass
+
+        if loop_count % self._motor_sample_every == 0:
+            try:
+                _, actual_antennas = self.current_robot.get_current_joint_positions()
+                actual_ant_left = float(actual_antennas[0])
+                actual_ant_right = float(actual_antennas[1])
+            except Exception:
+                pass
+
+            try:
+                pose = self.current_robot.get_current_head_pose()
+                actual_head_z, actual_head_pitch, actual_head_roll, actual_head_yaw = (
+                    _extract_euler_from_pose(pose)
+                )
+                actual_body_yaw = 0.0  # Not yet exposed by ReachyMini readback API
+            except Exception:
+                pass
+
+        # ---- Emotional adapter state ----
+        try:
+            motion = self._movement_adapter.get_body_motion()
+            ant_left_base, ant_right_base, ant_amp_deg, ant_freq_hz = (
+                self._movement_adapter.get_antenna_params()
+            )
+            base_amp = max(1e-6, getattr(self._movement_adapter, "base_antenna_amplitude", 15.0))
+            base_freq = max(1e-6, getattr(self._movement_adapter, "base_antenna_frequency", 0.5))
+            ant_amp_mult = ant_amp_deg / base_amp
+            ant_freq_mult = ant_freq_hz / base_freq
+        except Exception:
+            return  # Adapter not ready; skip this sample
+
+        # ---- Dominant anchor ----
+        anchor_name = "unknown"
+        anchor_weight = 0.0
+        try:
+            nearest = self._movement_adapter.mapper.get_nearest_anchors(self._last_vadcc, k=1)
+            if nearest:
+                anchor_name, anchor_weight = nearest[0]
+        except Exception:
+            pass
+
+        # ---- Euler decomposition of commanded head matrix ----
+        cmd_head_z, cmd_head_pitch, cmd_head_roll, cmd_head_yaw = (
+            _extract_euler_from_pose(commanded_head)
+        )
+
+        record = build_record(
+            monotonic_s=loop_start - self._telemetry_loop_start,
+            vadcc=self._last_vadcc,
+            baseline=self._last_baseline,
+            burst_influence=self._last_burst_influence,
+            motion=motion,
+            ant_left_base=float(ant_left_base),
+            ant_right_base=float(ant_right_base),
+            ant_amp_mult=ant_amp_mult,
+            ant_freq_mult=ant_freq_mult,
+            dominant_anchor_name=anchor_name,
+            dominant_anchor_weight=float(anchor_weight),
+            cmd_head_z=cmd_head_z,
+            cmd_head_pitch=cmd_head_pitch,
+            cmd_head_roll=cmd_head_roll,
+            cmd_head_yaw=cmd_head_yaw,
+            cmd_ant_left=float(commanded_antennas[0]),
+            cmd_ant_right=float(commanded_antennas[1]),
+            cmd_body_yaw=float(commanded_body_yaw),
+            actual_ant_left=actual_ant_left,
+            actual_ant_right=actual_ant_right,
+            actual_head_z=actual_head_z,
+            actual_head_pitch=actual_head_pitch,
+            actual_head_roll=actual_head_roll,
+            actual_head_yaw=actual_head_yaw,
+            actual_body_yaw=actual_body_yaw,
+            ik_failed=ik_failed,
+        )
+
+        self._telemetry_writer.push(record)
+
+        # burst_influence is a one-shot event; clear after capture
+        self._last_burst_influence = None
+
+    # ------------------------------------------------------------------ #
+    # Loop stats helpers                                                  #
+    # ------------------------------------------------------------------ #
+
     def _update_frequency_stats(
-        self, loop_start: float, prev_loop_start: float, stats: LoopFrequencyStats,
+        self,
+        loop_start: float,
+        prev_loop_start: float,
+        stats: LoopFrequencyStats,
     ) -> LoopFrequencyStats:
         """Update frequency statistics based on the current loop start time."""
         period = loop_start - prev_loop_start
@@ -783,7 +1061,11 @@ class MovementManager:
             stats.min_freq = min(stats.min_freq, stats.last_freq)
         return stats
 
-    def _schedule_next_tick(self, loop_start: float, stats: LoopFrequencyStats) -> Tuple[float, LoopFrequencyStats]:
+    def _schedule_next_tick(
+        self,
+        loop_start: float,
+        stats: LoopFrequencyStats,
+    ) -> Tuple[float, LoopFrequencyStats]:
         """Compute sleep time to maintain target frequency and update potential freq."""
         computation_time = self._now() - loop_start
         stats.potential_freq = 1.0 / computation_time if computation_time > 0 else float("inf")
@@ -802,7 +1084,12 @@ class MovementManager:
                 potential_freq=stats.potential_freq,
             )
 
-    def _maybe_log_frequency(self, loop_count: int, print_interval_loops: int, stats: LoopFrequencyStats) -> None:
+    def _maybe_log_frequency(
+        self,
+        loop_count: int,
+        print_interval_loops: int,
+        stats: LoopFrequencyStats,
+    ) -> None:
         """Emit frequency telemetry when enough loops have elapsed."""
         if loop_count % print_interval_loops != 0 or stats.count == 0:
             return
@@ -810,7 +1097,8 @@ class MovementManager:
         variance = stats.m2 / stats.count if stats.count > 0 else 0.0
         lowest = stats.min_freq if stats.min_freq != float("inf") else 0.0
         logger.debug(
-            "Loop freq - avg: %.2fHz, variance: %.4f, min: %.2fHz, last: %.2fHz, potential: %.2fHz, target: %.1fHz",
+            "Loop freq - avg: %.2fHz, variance: %.4f, min: %.2fHz, last: %.2fHz, "
+            "potential: %.2fHz, target: %.1fHz",
             stats.mean,
             variance,
             lowest,
@@ -820,65 +1108,21 @@ class MovementManager:
         )
         stats.reset()
 
+    # ------------------------------------------------------------------ #
+    # Face tracking                                                       #
+    # ------------------------------------------------------------------ #
+
     def _update_face_tracking(self, current_time: float) -> None:
         """Get face tracking offsets from camera worker thread."""
         if self.camera_worker is not None:
-            # Get face tracking offsets from camera worker thread
             offsets = self.camera_worker.get_face_tracking_offsets()
             self.state.face_tracking_offsets = offsets
         else:
-            # No camera worker, use neutral offsets
             self.state.face_tracking_offsets = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
-    def start(self) -> None:
-        """Start the worker thread that drives the 100 Hz control loop."""
-        if self._thread is not None and self._thread.is_alive():
-            logger.warning("Move worker already running; start() ignored")
-            return
-        self._stop_event.clear()
-        self._thread = threading.Thread(target=self.working_loop, daemon=True)
-        self._thread.start()
-        logger.debug("Move worker started")
-
-    def stop(self) -> None:
-        """Request the worker thread to stop and wait for it to exit.
-
-        Before stopping, resets the robot to a neutral position.
-        """
-        if self._thread is None or not self._thread.is_alive():
-            logger.debug("Move worker not running; stop() ignored")
-            return
-
-        logger.info("Stopping movement manager and resetting to neutral position...")
-
-        # Clear any queued moves and stop current move
-        self.clear_move_queue()
-
-        # Stop the worker thread first so it doesn't interfere
-        self._stop_event.set()
-        if self._thread is not None:
-            self._thread.join()
-            self._thread = None
-        logger.debug("Move worker stopped")
-
-        # Reset to neutral position using goto_target (same approach as wake_up)
-        try:
-            neutral_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
-            neutral_antennas = [0.0, 0.0]
-            neutral_body_yaw = 0.0
-
-            # Use goto_target directly on the robot
-            self.current_robot.goto_target(
-                head=neutral_head_pose,
-                antennas=neutral_antennas,
-                duration=2.0,
-                body_yaw=neutral_body_yaw,
-            )
-
-            logger.info("Reset to neutral position completed")
-
-        except Exception as e:
-            logger.error(f"Failed to reset to neutral position: {e}")
+    # ------------------------------------------------------------------ #
+    # Status                                                              #
+    # ------------------------------------------------------------------ #
 
     def get_status(self) -> Dict[str, Any]:
         """Return a lightweight status snapshot for observability."""
@@ -901,6 +1145,12 @@ class MovementManager:
             "queue_size": len(self.move_queue),
             "is_listening": self._is_listening,
             "breathing_active": self._breathing_active,
+            "telemetry_enabled": self._telemetry_enabled,
+            "telemetry_sample_hz": (
+                CONTROL_LOOP_FREQUENCY_HZ / self._telemetry_sample_every
+                if self._telemetry_sample_every > 0
+                else 0.0
+            ),
             "last_commanded_pose": {
                 "head": head_matrix,
                 "antennas": antennas,
@@ -915,10 +1165,14 @@ class MovementManager:
             },
         }
 
-    def working_loop(self) -> None:
-        """Control loop main movements - reproduces main_works.py control architecture.
+    # ------------------------------------------------------------------ #
+    # Main control loop                                                   #
+    # ------------------------------------------------------------------ #
 
-        Single set_target() call with pose fusion.
+    def working_loop(self) -> None:
+        """Control loop — 100 Hz pose fusion and robot command.
+
+        Single set_target() call per tick with full pose fusion.
         """
         logger.debug("Starting enhanced movement control loop (100Hz)")
 
@@ -950,15 +1204,18 @@ class MovementManager:
             # 5) Apply listening antenna freeze or blend-back
             antennas_cmd = self._calculate_blended_antennas(antennas)
 
-            # 6) Single set_target call - the only control point
+            # 6) Single set_target call — the only control point
             self._issue_control_command(head, antennas_cmd, body_yaw)
 
-            # 7) Adaptive sleep to align to next tick, then publish shared state
+            # 7) Telemetry capture (sampled, non-blocking ring-buffer push)
+            self._maybe_capture_telemetry(loop_count, loop_start, head, antennas_cmd, body_yaw)
+
+            # 8) Adaptive sleep to align to next tick, then publish shared state
             sleep_time, freq_stats = self._schedule_next_tick(loop_start, freq_stats)
             self._publish_shared_state()
             self._record_frequency_snapshot(freq_stats)
 
-            # 8) Periodic telemetry on loop frequency
+            # 9) Periodic telemetry on loop frequency
             self._maybe_log_frequency(loop_count, print_interval_loops, freq_stats)
 
             if sleep_time > 0:

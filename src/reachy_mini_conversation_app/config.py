@@ -5,6 +5,7 @@ from pathlib import Path
 
 from dotenv import find_dotenv, load_dotenv
 
+from dataclasses import dataclass
 
 # Locked profile: set to a profile name (e.g., "astronomer") to lock the app
 # to that profile and disable all profile switching. Leave as None for normal behavior.
@@ -12,6 +13,7 @@ LOCKED_PROFILE: str | None = None
 DEFAULT_PROFILES_DIRECTORY = Path(__file__).parent / "profiles"
 
 logger = logging.getLogger(__name__)
+
 
 def _env_flag(name: str, default: bool = False) -> bool:
     """Parse a boolean environment flag.
@@ -100,18 +102,69 @@ else:
         logger.warning("No .env file found, using environment variables")
 
 
+# ---------------------------------------------------------------------------
+# TelemetryConfig — must be defined before Config so Config.__init__ can use it
+# ---------------------------------------------------------------------------
+
+@dataclass
+class TelemetryConfig:
+    """Telemetry settings — loaded from env vars with defaults.
+
+    Environment variables:
+        TELEMETRY_ENABLED          true/false (default: true)
+        TELEMETRY_SAMPLE_RATE_HZ   float (default: 10.0)
+        TELEMETRY_BUFFER_CAPACITY  int   (default: 2048)
+        TELEMETRY_DRAIN_INTERVAL_S float (default: 0.5)
+    """
+
+    enabled: bool = True
+    sample_rate_hz: float = 10.0       # How often to capture a sample
+    buffer_capacity: int = 2048        # Ring buffer slots
+    drain_interval_s: float = 0.5      # How often drain thread flushes to disk
+
+    @classmethod
+    def from_env(cls) -> "TelemetryConfig":
+        return cls(
+            enabled=_env_flag("TELEMETRY_ENABLED", default=True),
+            sample_rate_hz=float(os.getenv("TELEMETRY_SAMPLE_RATE_HZ", "10.0")),
+            buffer_capacity=int(os.getenv("TELEMETRY_BUFFER_CAPACITY", "2048")),
+            drain_interval_s=float(os.getenv("TELEMETRY_DRAIN_INTERVAL_S", "0.5")),
+        )
+
+    @property
+    def sample_interval_loops(self) -> int:
+        """How many 100 Hz loop ticks between telemetry samples.
+
+        Example: 10 Hz → every 10 ticks. Clamped to at least 1.
+        """
+        from reachy_mini_conversation_app.moves import CONTROL_LOOP_FREQUENCY_HZ
+        return max(1, round(CONTROL_LOOP_FREQUENCY_HZ / self.sample_rate_hz))
+
+    @property
+    def motor_sample_interval_loops(self) -> int:
+        """How many ticks between actual motor readbacks.
+
+        Defaults to half the telemetry rate to stay light. Override via env if needed.
+        """
+        return self.sample_interval_loops * 2
+
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+
 class Config:
     """Configuration class for the conversation app."""
 
     # Required
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # The key is downloaded in console.py if needed
 
-    # Anima 
+    # Anima
     ANIMA_DATA_PATH: str = os.getenv(
         "ANIMA_DATA_PATH",
         str(Path(__file__).resolve().parents[2] / "data" / "NRC-VAD-Lexicon-v2.1" / "NRC-VAD-Lexicon-v2.1.txt"),
     )
-    
+
     ANIMA_TRANSITION_SIGMA: float = float(os.getenv("ANIMA_TRANSITION_SIGMA", "0.17"))
     ANIMA_VADCC_EXPONENT: float = float(os.getenv("ANIMA_VADCC_EXPONENT", "0.84"))
 
@@ -140,6 +193,9 @@ class Config:
 
     def __init__(self) -> None:
         """Initialize the configuration."""
+
+        self.telemetry = TelemetryConfig.from_env()
+
         if self.REACHY_MINI_CUSTOM_PROFILE and self.PROFILES_DIRECTORY != DEFAULT_PROFILES_DIRECTORY:
             selected_profile_path = self.PROFILES_DIRECTORY / self.REACHY_MINI_CUSTOM_PROFILE
             if not selected_profile_path.is_dir():
