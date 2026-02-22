@@ -54,6 +54,7 @@ class LocalStream:
         *,
         settings_app: Optional[FastAPI] = None,
         instance_path: Optional[str] = None,
+        conv_writer,
     ):
         """Initialize the stream with an OpenAI realtime handler and pipelines.
 
@@ -70,6 +71,7 @@ class LocalStream:
         self._instance_path: Optional[str] = instance_path
         self._settings_initialized = False
         self._asyncio_loop = None
+        self._conv_writer = conv_writer
 
     # ---- Settings UI (only when API key is missing) ----
     def _read_env_lines(self, env_path: Path) -> list[str]:
@@ -465,11 +467,12 @@ class LocalStream:
                 for msg in handler_output.args:
                     content = msg.get("content", "")
                     if isinstance(content, str):
-                        logger.info(
-                            "role=%s content=%s",
-                            msg.get("role"),
-                            content if len(content) < 500 else content[:500] + "…",
-                        )
+                        role = msg.get("role", "")
+                        logger.info("role=%s content=%s", role, content)
+                        if self._conv_writer is not None:
+                            # For assistant turns, get the utterance_id from the handler if available
+                            utterance_id = getattr(self.handler, "_last_utterance_id", "")
+                            self._conv_writer.write_turn(role=role, content=content, utterance_id=utterance_id)
 
             elif isinstance(handler_output, tuple):
                 input_sample_rate, audio_data = handler_output

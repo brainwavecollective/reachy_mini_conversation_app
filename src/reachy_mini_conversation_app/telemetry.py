@@ -1,21 +1,19 @@
-"""Telemetry ring buffer and CSV writer for behavioral analytics.
+"""Kinematics telemetry ring buffer and CSV writer.
 
-Design goals:
-- Zero-allocation writes in the 100 Hz control loop (ring buffer, pre-allocated slots)
-- All I/O happens in a background drain thread, fully decoupled from the hot path
-- Easy to add new fields: extend TelemetryRecord and HEADERS together
-- Tunable sample rate via config (TELEMETRY_SAMPLE_RATE_HZ)
+Captures physical robot state at a tunable sample rate (default 10 Hz).
+Motor readbacks at a further-reduced rate (default 5 Hz).
 
-Data captured per sample:
-  Timestamps           | wall clock + monotonic elapsed
-  Anima VADCC          | the raw emotional state vector from the engine
-  Anima influence      | the blend influence scalar applied to burst
-  Anima baseline       | the slow-drift baseline VADCC
-  Emotional offsets    | the head/body deltas the adapter produced
-  Commanded pose       | what we actually sent to the robot (post-fusion)
-  Actual motor state   | what the robot reports back (sampled at reduced rate)
-  Antenna params       | base angles + amp/freq multipliers
-  Dominant anchor      | which emotional anchor is dominating (name + weight)
+Anima VADCC state has been moved to anima_processing.csv (written by the
+anima library directly). This file contains only physical/motion state.
+
+Fields added vs previous version:
+  session_id — 8-char hex shared identifier for cross-file joining
+
+Fields removed vs previous version:
+  anima_valence, anima_arousal, anima_dominance, anima_complexity, anima_coherence
+  baseline_valence, baseline_arousal, baseline_dominance, baseline_complexity, baseline_coherence
+  burst_influence
+  (all moved to anima_processing.csv)
 """
 
 from __future__ import annotations
@@ -32,32 +30,16 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Record schema
+# Schema
 # ---------------------------------------------------------------------------
-# To add a new field: add it here AND add the matching header string to HEADERS.
-# The order of HEADERS must match the order of fields in TelemetryRecord.
 
 HEADERS = [
+    # --- Identity ---
+    "session_id",
+
     # --- Timestamps ---
-    "wall_time_iso",          # ISO-8601 wall clock string
-    "monotonic_s",            # time.monotonic() at sample point
-
-    # --- Anima emotional state ---
-    "anima_valence",
-    "anima_arousal",
-    "anima_dominance",
-    "anima_complexity",
-    "anima_coherence",
-
-    # --- Anima baseline (slow drift) ---
-    "baseline_valence",
-    "baseline_arousal",
-    "baseline_dominance",
-    "baseline_complexity",
-    "baseline_coherence",
-
-    # --- Anima burst influence scalar (None if no burst this sample) ---
-    "burst_influence",
+    "wall_time_iso",
+    "monotonic_s",
 
     # --- Emotional offsets produced by MovementAdapter ---
     "emo_offset_head_x",
@@ -74,7 +56,7 @@ HEADERS = [
     "ant_amp_mult",
     "ant_freq_mult",
 
-    # --- Dominant emotional anchor ---
+    # --- Dominant emotional anchor (what's driving motion) ---
     "dominant_anchor_name",
     "dominant_anchor_weight",
 
@@ -87,8 +69,7 @@ HEADERS = [
     "cmd_ant_right",
     "cmd_body_yaw",
 
-    # --- Actual motor state (from robot sensor readback, sampled at reduced rate) ---
-    # None/empty when not sampled this tick
+    # --- Actual motor state (from robot sensor readback, reduced rate) ---
     "actual_ant_left",
     "actual_ant_right",
     "actual_head_z",
@@ -101,28 +82,14 @@ HEADERS = [
 
 
 @dataclass
-class TelemetryRecord:
-    """One telemetry sample.  Field order must match HEADERS exactly."""
+class KinematicsTelemetryRecord:
+    """One kinematics telemetry sample. Field order must match HEADERS exactly."""
+    # Identity
+    session_id: str
+
     # Timestamps
     wall_time_iso: str
     monotonic_s: float
-
-    # Anima VADCC
-    anima_valence: float
-    anima_arousal: float
-    anima_dominance: float
-    anima_complexity: float
-    anima_coherence: float
-
-    # Anima baseline
-    baseline_valence: float
-    baseline_arousal: float
-    baseline_dominance: float
-    baseline_complexity: float
-    baseline_coherence: float
-
-    # Burst influence
-    burst_influence: Optional[float]
 
     # Emotional head/body offsets
     emo_offset_head_x: float
@@ -160,51 +127,39 @@ class TelemetryRecord:
     actual_head_roll: str
     actual_head_yaw: str
     actual_body_yaw: str
-    
+
     ik_failed: bool
 
 
-# Sanity-check at import time that headers and dataclass fields stay in sync.
-assert len(HEADERS) == len(fields(TelemetryRecord)), (
-    f"HEADERS ({len(HEADERS)}) and TelemetryRecord fields "
-    f"({len(fields(TelemetryRecord))}) are out of sync!"
+assert len(HEADERS) == len(fields(KinematicsTelemetryRecord)), (
+    f"HEADERS ({len(HEADERS)}) and KinematicsTelemetryRecord fields "
+    f"({len(fields(KinematicsTelemetryRecord))}) are out of sync!"
 )
 
-
 # ---------------------------------------------------------------------------
-# Ring buffer (lock-free writer, locked reader)
+# Ring buffer
 # ---------------------------------------------------------------------------
 
 class TelemetryBuffer:
-    """Fixed-size ring buffer for TelemetryRecord objects.
-
-    Writers (control loop thread) call push() — O(1), no allocation.
-    The drain thread calls drain() — returns a list of pending records.
-
-    Because there is exactly one writer and one reader, a single lock on
-    drain() is sufficient; push() never contends.
-    """
+    """Fixed-size ring buffer for KinematicsTelemetryRecord objects."""
 
     def __init__(self, capacity: int = 1024):
-        self._buf: list[Optional[TelemetryRecord]] = [None] * capacity
+        self._buf: list[Optional[KinematicsTelemetryRecord]] = [None] * capacity
         self._capacity = capacity
-        self._write_idx = 0          # owned by writer
-        self._read_idx = 0           # owned by drain thread, protected by lock
+        self._write_idx = 0
+        self._read_idx = 0
         self._lock = threading.Lock()
         self._dropped = 0
 
-    def push(self, record: TelemetryRecord) -> None:
-        """Write a record.  Called from the control loop thread."""
+    def push(self, record: KinematicsTelemetryRecord) -> None:
         next_write = (self._write_idx + 1) % self._capacity
         if next_write == self._read_idx:
-            # Buffer full — overwrite oldest and count the drop
             self._dropped += 1
             self._read_idx = (self._read_idx + 1) % self._capacity
         self._buf[self._write_idx] = record
         self._write_idx = next_write
 
-    def drain(self) -> list[TelemetryRecord]:
-        """Return all unread records and advance read pointer.  Called from drain thread."""
+    def drain(self) -> list[KinematicsTelemetryRecord]:
         with self._lock:
             result = []
             while self._read_idx != self._write_idx:
@@ -220,18 +175,11 @@ class TelemetryBuffer:
 
 
 # ---------------------------------------------------------------------------
-# Telemetry writer (drain thread + CSV output)
+# Writer
 # ---------------------------------------------------------------------------
 
 class TelemetryWriter:
-    """Owns the ring buffer, drain thread, and CSV file.
-
-    Usage:
-        writer = TelemetryWriter(path, drain_interval_s=0.5)
-        writer.start()
-        writer.push(record)   # from control loop, cheap
-        writer.stop()         # flushes remaining records, closes file
-    """
+    """Owns the ring buffer, drain thread, and CSV file."""
 
     def __init__(
         self,
@@ -245,7 +193,7 @@ class TelemetryWriter:
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._file: Optional[io.TextIOWrapper] = None
-        self._csv_writer: Optional[csv.writer] = None
+        self._csv_writer = None
         self._rows_written = 0
 
     def start(self) -> None:
@@ -257,35 +205,29 @@ class TelemetryWriter:
         self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._drain_loop,
-            name="telemetry-drain",
+            name="kinematics-telemetry-drain",
             daemon=True,
         )
         self._thread.start()
-        logger.info("Telemetry writer started → %s", self._path)
+        logger.info("Kinematics telemetry writer started → %s", self._path)
 
     def stop(self) -> None:
         self._stop_event.set()
         if self._thread is not None:
             self._thread.join(timeout=5.0)
             self._thread = None
-        # Final flush
         self._flush()
         if self._file is not None:
             self._file.close()
             self._file = None
         dropped = self._buffer.dropped
         logger.info(
-            "Telemetry writer stopped. rows=%d dropped=%d path=%s",
+            "Kinematics telemetry writer stopped. rows=%d dropped=%d path=%s",
             self._rows_written, dropped, self._path,
         )
 
-    def push(self, record: TelemetryRecord) -> None:
-        """Called from the hot path (control loop thread)."""
+    def push(self, record: KinematicsTelemetryRecord) -> None:
         self._buffer.push(record)
-
-    # ------------------------------------------------------------------
-    # Internal
-    # ------------------------------------------------------------------
 
     def _drain_loop(self) -> None:
         while not self._stop_event.is_set():
@@ -302,37 +244,26 @@ class TelemetryWriter:
         self._file.flush()
         if self._buffer.dropped:
             logger.warning(
-                "Telemetry buffer overrun: %d records dropped total",
+                "Kinematics telemetry buffer overrun: %d records dropped total",
                 self._buffer.dropped,
             )
 
 
+# ---------------------------------------------------------------------------
+# Formatting helpers
+# ---------------------------------------------------------------------------
+
 def _fmt(v: float, precision: int = 5) -> str:
-    """Format float with fixed precision, or empty string for None."""
     if v is None:
         return ""
     return f"{v:.{precision}f}"
 
 
-def _record_to_row(rec: TelemetryRecord) -> list:
-    """Convert a TelemetryRecord to a CSV row list."""
+def _record_to_row(rec: KinematicsTelemetryRecord) -> list:
     return [
+        rec.session_id,
         rec.wall_time_iso,
         _fmt(rec.monotonic_s, 4),
-
-        _fmt(rec.anima_valence),
-        _fmt(rec.anima_arousal),
-        _fmt(rec.anima_dominance),
-        _fmt(rec.anima_complexity),
-        _fmt(rec.anima_coherence),
-
-        _fmt(rec.baseline_valence),
-        _fmt(rec.baseline_arousal),
-        _fmt(rec.baseline_dominance),
-        _fmt(rec.baseline_complexity),
-        _fmt(rec.baseline_coherence),
-
-        _fmt(rec.burst_influence) if rec.burst_influence is not None else "",
 
         _fmt(rec.emo_offset_head_x),
         _fmt(rec.emo_offset_head_y),
@@ -370,15 +301,13 @@ def _record_to_row(rec: TelemetryRecord) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Convenience: build a TelemetryRecord from live data
+# Convenience builder
 # ---------------------------------------------------------------------------
 
 def build_record(
     *,
+    session_id: str,
     monotonic_s: float,
-    vadcc: tuple,                    # 5-tuple from anima
-    baseline: tuple,                 # 5-tuple baseline
-    burst_influence: Optional[float],
     motion,                          # MotionTarget from adapter
     ant_left_base: float,
     ant_right_base: float,
@@ -401,30 +330,17 @@ def build_record(
     actual_head_yaw: Optional[float] = None,
     actual_body_yaw: Optional[float] = None,
     ik_failed: bool = False,
-) -> TelemetryRecord:
-    """Construct a TelemetryRecord from the values available in the control loop."""
+) -> KinematicsTelemetryRecord:
+    """Construct a KinematicsTelemetryRecord from the values available in the control loop."""
     import datetime
 
     def opt_fmt(v: Optional[float]) -> str:
         return _fmt(v) if v is not None else ""
 
-    return TelemetryRecord(
+    return KinematicsTelemetryRecord(
+        session_id=session_id,
         wall_time_iso=datetime.datetime.now().isoformat(timespec="milliseconds"),
         monotonic_s=monotonic_s,
-
-        anima_valence=vadcc[0],
-        anima_arousal=vadcc[1],
-        anima_dominance=vadcc[2],
-        anima_complexity=vadcc[3],
-        anima_coherence=vadcc[4],
-
-        baseline_valence=baseline[0],
-        baseline_arousal=baseline[1],
-        baseline_dominance=baseline[2],
-        baseline_complexity=baseline[3],
-        baseline_coherence=baseline[4],
-
-        burst_influence=burst_influence,
 
         emo_offset_head_x=motion.head_x,
         emo_offset_head_y=motion.head_y,
@@ -458,5 +374,4 @@ def build_record(
         actual_head_yaw=opt_fmt(actual_head_yaw),
         actual_body_yaw=opt_fmt(actual_body_yaw),
         ik_failed=ik_failed,
-
     )

@@ -65,8 +65,7 @@ from reachy_mini.utils.interpolation import (
 from reachy_mini_conversation_app.config import config
 from reachy_mini_conversation_app.ik_workspace import IKWorkspace
 from reachy_mini_conversation_app.telemetry import TelemetryWriter, build_record
-from reachy_mini_conversation_app.logging_setup import get_telemetry_path
-
+from reachy_mini_conversation_app.logging_setup import get_kinematics_telemetry_path
 
 logger = logging.getLogger(__name__)
 
@@ -323,11 +322,12 @@ class MovementManager:
     - Secondary offsets are staged via dirty flags guarded by locks and consumed
       atomically inside the worker loop.
     """
-
+def __init__(self, current_robot, camera_worker=None, session_id: str = ""):
     def __init__(
         self,
         current_robot: ReachyMini,
         camera_worker: "Any" = None,
+        session_id: str = ""
     ):
         """Initialize movement manager."""
         self.current_robot = current_robot
@@ -408,36 +408,7 @@ class MovementManager:
         self._telemetry_writer: Optional[TelemetryWriter] = None
         self._telemetry_loop_start: float = self._now()  # elapsed-time anchor
 
-        # Anima state — written by set_anima_state() from outside the loop thread,
-        # read inside the loop.  Tuple assignment is atomic under the GIL.
-        self._last_vadcc: tuple = (0.5, 0.5, 0.5, 0.5, 0.5)
-        self._last_baseline: tuple = (0.5, 0.5, 0.5, 0.5, 0.5)
-        self._last_burst_influence: Optional[float] = None
-
-    # ------------------------------------------------------------------ #
-    # Telemetry public API                                                 #
-    # ------------------------------------------------------------------ #
-
-    def set_anima_state(
-        self,
-        vadcc: tuple,
-        baseline: tuple,
-        burst_influence: Optional[float] = None,
-    ) -> None:
-        """Receive current Anima VADCC state for telemetry capture.
-
-        Called by the Anima subscriber (openai_realtime.py or similar) whenever
-        VADCC updates.  Thread-safe via GIL-protected tuple assignment.
-
-        Args:
-            vadcc: Current 5-tuple (V, A, D, Cx, Ch) from Anima engine
-            baseline: Current 5-tuple slow baseline from Blend
-            burst_influence: Influence scalar from the most recent burst, or None
-        """
-        self._last_vadcc = vadcc
-        self._last_baseline = baseline
-        if burst_influence is not None:
-            self._last_burst_influence = burst_influence
+        self._session_id: str = session_id  # (add session_id param to __init__)
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -524,7 +495,7 @@ class MovementManager:
         # Start telemetry writer if enabled
         if self._telemetry_enabled:
             try:
-                csv_path = get_telemetry_path()
+                csv_path = get_kinematics_telemetry_path()
                 self._telemetry_writer = TelemetryWriter(
                     output_path=csv_path,
                     drain_interval_s=config.telemetry.drain_interval_s,
@@ -925,20 +896,13 @@ class MovementManager:
 
     def _maybe_capture_telemetry(
         self,
-        loop_count: int,
-        loop_start: float,
-        commanded_head: NDArray,
-        commanded_antennas: Tuple[float, float],
-        commanded_body_yaw: float,
-    ) -> None:
-        """Capture one telemetry sample if this is a sample tick.
-
-        Called at the end of working_loop after _issue_control_command.
-        Only executes every _telemetry_sample_every ticks; motor readback
-        happens at the further-reduced _motor_sample_every rate.
-        All work is O(1); the ring-buffer push is the only allocation-adjacent
-        operation and it never blocks.
-        """
+        loop_count,
+        loop_start,
+        commanded_head,
+        commanded_antennas,
+        commanded_body_yaw,
+    ):
+        """Capture one kinematics telemetry sample if this is a sample tick."""
         if not self._telemetry_enabled or self._telemetry_writer is None:
             return
         if self._movement_adapter is None:
@@ -947,15 +911,15 @@ class MovementManager:
             return
 
         # ---- Optional motor readback (reduced rate) ----
-        actual_ant_left: Optional[float] = None
-        actual_ant_right: Optional[float] = None
-        actual_head_z: Optional[float] = None
-        actual_head_pitch: Optional[float] = None
-        actual_head_roll: Optional[float] = None
-        actual_head_yaw: Optional[float] = None
-        actual_body_yaw: Optional[float] = None
+        actual_ant_left = None
+        actual_ant_right = None
+        actual_head_z = None
+        actual_head_pitch = None
+        actual_head_roll = None
+        actual_head_yaw = None
+        actual_body_yaw = None
 
-        ik_failed: bool = False
+        ik_failed = False
         try:
             ik_failed = self.current_robot.client.get_ik_failed()
         except Exception:
@@ -974,7 +938,7 @@ class MovementManager:
                 actual_head_z, actual_head_pitch, actual_head_roll, actual_head_yaw = (
                     _extract_euler_from_pose(pose)
                 )
-                actual_body_yaw = 0.0  # Not yet exposed by ReachyMini readback API
+                actual_body_yaw = 0.0
             except Exception:
                 pass
 
@@ -989,13 +953,18 @@ class MovementManager:
             ant_amp_mult = ant_amp_deg / base_amp
             ant_freq_mult = ant_freq_hz / base_freq
         except Exception:
-            return  # Adapter not ready; skip this sample
+            return
 
         # ---- Dominant anchor ----
         anchor_name = "unknown"
         anchor_weight = 0.0
         try:
-            nearest = self._movement_adapter.mapper.get_nearest_anchors(self._last_vadcc, k=1)
+            # NOTE: _last_vadcc removed; use adapter's current state for anchor lookup
+            current_motion = self._movement_adapter.get_body_motion()
+            # Anchor lookup via adapter's last known VADCC is done inside adapter
+            nearest = self._movement_adapter.mapper.get_nearest_anchors(
+                self._movement_adapter._last_logged_vadcc or (0.5,)*5, k=1
+            )
             if nearest:
                 anchor_name, anchor_weight = nearest[0]
         except Exception:
@@ -1006,11 +975,10 @@ class MovementManager:
             _extract_euler_from_pose(commanded_head)
         )
 
+        from reachy_mini_conversation_app.telemetry import build_record
         record = build_record(
+            session_id=self._session_id,
             monotonic_s=loop_start - self._telemetry_loop_start,
-            vadcc=self._last_vadcc,
-            baseline=self._last_baseline,
-            burst_influence=self._last_burst_influence,
             motion=motion,
             ant_left_base=float(ant_left_base),
             ant_right_base=float(ant_right_base),
@@ -1036,9 +1004,6 @@ class MovementManager:
         )
 
         self._telemetry_writer.push(record)
-
-        # burst_influence is a one-shot event; clear after capture
-        self._last_burst_influence = None
 
     # ------------------------------------------------------------------ #
     # Loop stats helpers                                                  #
