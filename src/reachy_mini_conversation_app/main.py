@@ -49,6 +49,13 @@ def run(
     from reachy_mini_conversation_app.openai_realtime import OpenaiRealtimeHandler
     from reachy_mini_conversation_app.tools.core_tools import ToolDependencies
     from reachy_mini_conversation_app.audio.head_wobbler import HeadWobbler
+    from reachy_mini_conversation_app.logging_setup import (
+        get_session_id,
+        get_anima_telemetry_path,
+        get_conversation_telemetry_path,
+    )
+    from reachy_mini_conversation_app.conversation_telemetry import ConversationTelemetryWriter
+    from anima import AnimaTelemetryWriter
 
     logger = setup_logger(args.debug)
 
@@ -107,9 +114,25 @@ def run(
 
     camera_worker, _, vision_manager = handle_vision_stuff(args, robot)
 
+    # --- Telemetry writers ---
+    session_id = get_session_id()
+
+    anima_writer = AnimaTelemetryWriter(
+        output_path=get_anima_telemetry_path(),
+        session_id=session_id,
+    )
+    anima_writer.start()
+
+    conv_writer = ConversationTelemetryWriter(
+        output_path=get_conversation_telemetry_path(),
+        session_id=session_id,
+    )
+    conv_writer.start()
+
     movement_manager = MovementManager(
         current_robot=robot,
         camera_worker=camera_worker,
+        session_id=session_id,
     )
 
     head_wobbler = HeadWobbler(set_speech_offsets=movement_manager.set_speech_offsets)
@@ -133,7 +156,12 @@ def run(
     )
     logger.debug(f"Chatbot avatar images: {chatbot.avatar_images}")
 
-    handler = OpenaiRealtimeHandler(deps, gradio_mode=args.gradio, instance_path=instance_path)
+    handler = OpenaiRealtimeHandler(
+        deps,
+        gradio_mode=args.gradio,
+        instance_path=instance_path,
+        anima_writer=anima_writer,
+    )
 
     stream_manager: gr.Blocks | LocalStream | None = None
 
@@ -172,12 +200,12 @@ def run(
 
         app = gr.mount_gradio_app(app, stream.ui, path="/")
     else:
-        # In headless mode, wire settings_app + instance_path to console LocalStream
         stream_manager = LocalStream(
             handler,
             robot,
             settings_app=settings_app,
             instance_path=instance_path,
+            conv_writer=conv_writer,
         )
 
     # Each async service → its own thread/loop
@@ -214,6 +242,9 @@ def run(
         if vision_manager:
             vision_manager.stop()
 
+        anima_writer.stop()
+        conv_writer.stop()
+
         # Ensure media is explicitly closed before disconnecting
         try:
             robot.media.close()
@@ -238,9 +269,6 @@ class ReachyMiniConversationApp(ReachyMiniApp):  # type: ignore[misc]
         asyncio.set_event_loop(loop)
 
         args, _ = parse_args()
-
-        # is_wireless = reachy_mini.client.get_status()["wireless_version"]
-        # args.head_tracker = None if is_wireless else "mediapipe"
 
         instance_path = self._get_instance_path().parent
         run(

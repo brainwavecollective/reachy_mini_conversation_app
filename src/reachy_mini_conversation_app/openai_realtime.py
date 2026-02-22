@@ -27,7 +27,8 @@ from reachy_mini_conversation_app.tools.core_tools import (
     dispatch_tool_call,
 )
 
-
+import uuid
+                        
 logger = logging.getLogger(__name__)
 
 OPEN_AI_INPUT_SAMPLE_RATE: Final[Literal[24000]] = 24000
@@ -37,7 +38,7 @@ OPEN_AI_OUTPUT_SAMPLE_RATE: Final[Literal[24000]] = 24000
 class OpenaiRealtimeHandler(AsyncStreamHandler):
     """An OpenAI realtime handler for fastrtc Stream."""
 
-    def __init__(self, deps: ToolDependencies, gradio_mode: bool = False, instance_path: Optional[str] = None):
+    def __init__(self, deps: ToolDependencies, gradio_mode: bool = False, instance_path: Optional[str] = None, anima_writer=None):
         """Initialize the handler."""
         super().__init__(
             expected_layout="mono",
@@ -75,10 +76,13 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         # Anima emotional engine integration
         self.anima: Optional[Anima] = None
         self.movement_adapter: Optional[MovementAdapter] = None
+        self._anima_writer = anima_writer
 
         # Internal lifecycle flags
         self._shutdown_requested: bool = False
         self._connected_event: asyncio.Event = asyncio.Event()
+        
+        self._last_utterance_id: str = ""
 
     def copy(self) -> "OpenaiRealtimeHandler":
         """Create a copy of the handler."""
@@ -184,7 +188,9 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 nrc_lexicon_path=config.ANIMA_DATA_PATH,
                 debug=logging.getLogger().isEnabledFor(logging.DEBUG),
             )
-            self.anima = Anima(anima_config)
+            
+            self.anima = Anima(anima_config, telemetry_writer=self._anima_writer)
+
             await self.anima.start()
             
             # Setup movement adapter
@@ -388,11 +394,13 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                     await self.output_queue.put(AdditionalOutputs({"role": "assistant", "content": event.transcript}))
 
                     if self.anima is not None:
+                        utterance_id = uuid.uuid4().hex[:8]
+                        self._last_utterance_id = utterance_id
                         logger.info(f"[ANIMA] Feeding transcript to Anima: '{event.transcript[:80]}...'")
-                        asyncio.create_task(self.anima.process_text(event.transcript))
+                        asyncio.create_task(self.anima.process_text(event.transcript, utterance_id=utterance_id))
                     else:
                         logger.warning("[ANIMA] anima is None — skipping process_text")
-
+                
                 # Handle audio delta
                 if event.type in ("response.audio.delta", "response.output_audio.delta"):
                     if self.deps.head_wobbler is not None:
