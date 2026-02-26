@@ -501,6 +501,6 @@ class LocalStream:
 
             else:
                 if handler_output is not None:
-                    logger.debug("Ignoring output type=%s", type(output).__name__)
+                    logger.debug("Ignoring output type=%s", type(handler_output).__name__)
                     
             await asyncio.sleep(0)  # yield to event loop
