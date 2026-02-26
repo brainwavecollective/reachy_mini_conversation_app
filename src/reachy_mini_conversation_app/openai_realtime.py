@@ -394,10 +394,8 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                     await self.output_queue.put(AdditionalOutputs({"role": "assistant", "content": event.transcript}))
 
                     if self.anima is not None:
-                        utterance_id = uuid.uuid4().hex[:8]
-                        self._last_utterance_id = utterance_id
                         logger.info(f"[ANIMA] Feeding transcript to Anima: '{event.transcript[:80]}...'")
-                        asyncio.create_task(self.anima.process_text(event.transcript, utterance_id=utterance_id))
+                        asyncio.create_task(self.anima.process_text(event.transcript))
                     else:
                         logger.warning("[ANIMA] anima is None — skipping process_text")
                 

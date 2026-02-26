@@ -322,7 +322,6 @@ class MovementManager:
     - Secondary offsets are staged via dirty flags guarded by locks and consumed
       atomically inside the worker loop.
     """
-def __init__(self, current_robot, camera_worker=None, session_id: str = ""):
     def __init__(
         self,
         current_robot: ReachyMini,
