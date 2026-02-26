@@ -122,6 +122,9 @@ class TelemetryConfig:
     buffer_capacity: int = 2048        # Ring buffer slots
     drain_interval_s: float = 0.5      # How often drain thread flushes to disk
 
+    # Determine whether or not to log user side of the conversation
+    log_user_content: bool = False
+
     @classmethod
     def from_env(cls) -> "TelemetryConfig":
         return cls(
@@ -129,6 +132,7 @@ class TelemetryConfig:
             sample_rate_hz=float(os.getenv("TELEMETRY_SAMPLE_RATE_HZ", "10.0")),
             buffer_capacity=int(os.getenv("TELEMETRY_BUFFER_CAPACITY", "2048")),
             drain_interval_s=float(os.getenv("TELEMETRY_DRAIN_INTERVAL_S", "0.5")),
+            log_user_content=_env_flag("LOG_USER_CONTENT", default=False),
         )
 
     @property

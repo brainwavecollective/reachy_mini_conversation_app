@@ -126,6 +126,7 @@ def run(
     conv_writer = ConversationTelemetryWriter(
         output_path=get_conversation_telemetry_path(),
         session_id=session_id,
+        log_user_content=config.telemetry.log_user_content,
     )
     conv_writer.start()
 

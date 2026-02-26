@@ -55,8 +55,8 @@ class ConversationTelemetryWriter:
     Volume is very low (one row per turn) so a ring buffer is overkill —
     writes happen directly under a lock.
     """
-
-    def __init__(self, output_path: Path, session_id: str):
+    
+    def __init__(self, output_path: Path, session_id: str, log_user_content: bool = False):
         self._path = output_path
         self.session_id = session_id
         self._lock = threading.Lock()
@@ -64,6 +64,7 @@ class ConversationTelemetryWriter:
         self._csv_writer = None
         self._rows_written = 0
         self._monotonic_start = time.monotonic()
+        self._log_user_content = log_user_content
 
     def start(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -92,12 +93,15 @@ class ConversationTelemetryWriter:
             return
         now = datetime.now().isoformat(timespec="milliseconds")
         elapsed = time.monotonic() - self._monotonic_start
+        
+        content_to_write = content if (self._log_user_content or role != "user") else ""
+        
         rec = ConversationRecord(
             session_id=self.session_id,
             wall_time_iso=now,
             monotonic_s=elapsed,
             role=role,
-            content=content,
+            content=content_to_write,
             utterance_id=utterance_id,
         )
         with self._lock:
