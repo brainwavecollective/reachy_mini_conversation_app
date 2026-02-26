@@ -117,7 +117,7 @@ class TelemetryConfig:
         TELEMETRY_DRAIN_INTERVAL_S float (default: 0.5)
     """
 
-    enabled: bool = True
+    enabled: bool = False
     sample_rate_hz: float = 10.0       # How often to capture a sample
     buffer_capacity: int = 2048        # Ring buffer slots
     drain_interval_s: float = 0.5      # How often drain thread flushes to disk
