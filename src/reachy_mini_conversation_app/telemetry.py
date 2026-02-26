@@ -152,12 +152,13 @@ class TelemetryBuffer:
         self._dropped = 0
 
     def push(self, record: KinematicsTelemetryRecord) -> None:
-        next_write = (self._write_idx + 1) % self._capacity
-        if next_write == self._read_idx:
-            self._dropped += 1
-            self._read_idx = (self._read_idx + 1) % self._capacity
-        self._buf[self._write_idx] = record
-        self._write_idx = next_write
+        with self._lock:
+            next_write = (self._write_idx + 1) % self._capacity
+            if next_write == self._read_idx:
+                self._dropped += 1
+                self._read_idx = (self._read_idx + 1) % self._capacity
+            self._buf[self._write_idx] = record
+            self._write_idx = next_write
 
     def drain(self) -> list[KinematicsTelemetryRecord]:
         with self._lock:
