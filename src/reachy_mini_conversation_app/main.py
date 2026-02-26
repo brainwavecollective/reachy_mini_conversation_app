@@ -20,6 +20,7 @@ from reachy_mini_conversation_app.utils import (
     handle_vision_stuff,
     log_connection_troubleshooting,
 )
+from reachy_mini_conversation_app.config import config
 
 import logging
 

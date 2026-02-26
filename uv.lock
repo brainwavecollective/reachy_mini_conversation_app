@@ -166,7 +166,7 @@ wheels = [
 
 [[package]]
 name = "anima-engine"
-version = "0.0.1"
+version = "0.0.2"
 source = { editable = "../anima-engine" }
 dependencies = [
     { name = "datasets" },
@@ -181,22 +181,25 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "datasets", specifier = ">=2.0.0" },
-    { name = "huggingface-hub", specifier = ">=1.4.0" },
+    { name = "huggingface-hub", specifier = ">=1.3.0" },
     { name = "nltk", specifier = ">=3.8.1" },
     { name = "numpy", specifier = ">=2.2.0" },
     { name = "ollama", marker = "extra == 'anchor'", specifier = ">=0.1.7" },
     { name = "sentence-transformers", specifier = ">=5.2.0" },
     { name = "textstat", specifier = ">=0.7.3" },
-    { name = "transformers", specifier = ">=5.1.0" },
+    { name = "transformers", specifier = ">=5.0.0rc2" },
 ]
 provides-extras = ["anchor"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "build", specifier = ">=1.4.0" }]
+dev = [
+    { name = "build", specifier = ">=1.4.0" },
+    { name = "pytest", specifier = ">=9.0.0" },
+]
 
 [[package]]
 name = "anima-reachy-conversation"
-version = "0.0.1"
+version = "0.0.2"
 source = { editable = "../anima-reachy-conversation" }
 dependencies = [
     { name = "anima-engine" },

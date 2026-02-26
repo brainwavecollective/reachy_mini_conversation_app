@@ -111,7 +111,7 @@ class TelemetryConfig:
     """Telemetry settings — loaded from env vars with defaults.
 
     Environment variables:
-        TELEMETRY_ENABLED          true/false (default: true)
+        TELEMETRY_ENABLED          true/false (default: false)
         TELEMETRY_SAMPLE_RATE_HZ   float (default: 10.0)
         TELEMETRY_BUFFER_CAPACITY  int   (default: 2048)
         TELEMETRY_DRAIN_INTERVAL_S float (default: 0.5)
