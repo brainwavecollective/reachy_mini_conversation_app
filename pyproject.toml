@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "reachy_mini_conversation_app"
+name = "reachy_mini_anima_conversation_app"
 version = "0.2.2"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
@@ -93,11 +93,9 @@ where = ["src"]
 reachy_mini_conversation_app = [
   "images/*",
   "static/*",
-  ".env.example",
-  "demos/**/*.txt",
-  "prompts_library/*.txt",
-  "profiles/**/*.txt",
-  "prompts/**/*.txt",
+  "profiles/*/*.txt",
+  "prompts/*/*.txt",
+  "prompts/*.txt",
 ]
 
 [tool.ruff]
