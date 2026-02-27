@@ -1,1 +1,0 @@
-recursive-include src/reachy_mini_conversation_app *.txt *.png *.gif *.svg *.html *.js *.css
