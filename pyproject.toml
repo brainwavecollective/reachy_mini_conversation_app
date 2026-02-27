@@ -34,9 +34,6 @@ dependencies = [
     "anima-engine",
     "anima-reachy-conversation",
 
-    #LED Eyes
-    "reachy-eyes @ git+https://github.com/brainwavecollective/reachy-eyes.git",
-
 ]
 
 [project.optional-dependencies]
