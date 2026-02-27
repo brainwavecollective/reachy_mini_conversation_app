@@ -1,14 +1,22 @@
 ---
-title: Reachy Mini Conversation App
+title: Reachy Mini Anima Conversation App
 emoji: 🎤
 colorFrom: red
 colorTo: blue
 sdk: static
 pinned: false
-short_description: Talk with Reachy Mini !
+short_description: Watch Reachy Mini express emotion while you talk to it!
 tags:
  - reachy_mini
  - reachy_mini_python_app
+---
+
+# Notice: This is a Brain Wave Collective modified app
+
+This repository is a **modified fork** of the original upstream Reachy Mini Conversation App. This is an example to showcase how Anima can be used to allow a robot to express emotion. It works exactly the same way that the original app works, except that it is modified to include emotionally-inspired motion based on the content of the conversation. Emotional movements and expressions are based entirely on the words being spoken by the robot.
+
+[Learn more about Anima](https://github.com/brainwavecollective/anima-engine).
+
 ---
 
 # Reachy Mini conversation app

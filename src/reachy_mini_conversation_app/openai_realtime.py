@@ -16,6 +16,9 @@ from numpy.typing import NDArray
 from scipy.signal import resample
 from websockets.exceptions import ConnectionClosedError
 
+from anima import Anima, Config as AnimaConfig
+from anima_reachy_conversation import MovementAdapter
+
 from reachy_mini_conversation_app.config import config
 from reachy_mini_conversation_app.prompts import get_session_voice, get_session_instructions
 from reachy_mini_conversation_app.tools.core_tools import (
@@ -24,39 +27,18 @@ from reachy_mini_conversation_app.tools.core_tools import (
     dispatch_tool_call,
 )
 
-
+import uuid
+                        
 logger = logging.getLogger(__name__)
 
 OPEN_AI_INPUT_SAMPLE_RATE: Final[Literal[24000]] = 24000
 OPEN_AI_OUTPUT_SAMPLE_RATE: Final[Literal[24000]] = 24000
 
-# Cost tracking from usage data (pricing as of Feb 2026 https://openai.com/api/pricing/)
-AUDIO_INPUT_COST_PER_1M = 32.0
-AUDIO_OUTPUT_COST_PER_1M = 64.0
-TEXT_INPUT_COST_PER_1M = 4.0
-TEXT_OUTPUT_COST_PER_1M = 16.0
-IMAGE_INPUT_COST_PER_1M = 5.0
-
-
-def _compute_response_cost(usage: Any) -> float:
-    """Compute dollar cost from a response usage object."""
-    inp = getattr(usage, "input_token_details", None)
-    out = getattr(usage, "output_token_details", None)
-    cost = 0.0
-    if inp:
-        cost += (getattr(inp, "audio_tokens", 0) or 0) * AUDIO_INPUT_COST_PER_1M / 1e6
-        cost += (getattr(inp, "text_tokens", 0) or 0) * TEXT_INPUT_COST_PER_1M / 1e6
-        cost += (getattr(inp, "image_tokens", 0) or 0) * IMAGE_INPUT_COST_PER_1M / 1e6
-    if out:
-        cost += (getattr(out, "audio_tokens", 0) or 0) * AUDIO_OUTPUT_COST_PER_1M / 1e6
-        cost += (getattr(out, "text_tokens", 0) or 0) * TEXT_OUTPUT_COST_PER_1M / 1e6
-    return cost
-
 
 class OpenaiRealtimeHandler(AsyncStreamHandler):
     """An OpenAI realtime handler for fastrtc Stream."""
 
-    def __init__(self, deps: ToolDependencies, gradio_mode: bool = False, instance_path: Optional[str] = None):
+    def __init__(self, deps: ToolDependencies, gradio_mode: bool = False, instance_path: Optional[str] = None, anima_writer=None):
         """Initialize the handler."""
         super().__init__(
             expected_layout="mono",
@@ -91,12 +73,16 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         self.partial_transcript_sequence: int = 0  # sequence counter to prevent stale emissions
         self.partial_debounce_delay = 0.5  # seconds
 
+        # Anima emotional engine integration
+        self.anima: Optional[Anima] = None
+        self.movement_adapter: Optional[MovementAdapter] = None
+        self._anima_writer = anima_writer
+
         # Internal lifecycle flags
         self._shutdown_requested: bool = False
         self._connected_event: asyncio.Event = asyncio.Event()
-
-        # Cost tracking
-        self.cumulative_cost: float = 0.0
+        
+        self._last_utterance_id: str = ""
 
     def copy(self) -> "OpenaiRealtimeHandler":
         """Create a copy of the handler."""
@@ -194,6 +180,38 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 openai_api_key = "DUMMY"
 
         self.client = AsyncOpenAI(api_key=openai_api_key)
+        
+        # Initialize Anima emotional engine
+        try:
+            logger.info("Initializing Anima emotional engine...")
+            anima_config = AnimaConfig(
+                nrc_lexicon_path=config.ANIMA_DATA_PATH,
+                debug=logging.getLogger().isEnabledFor(logging.DEBUG),
+            )
+            
+            self.anima = Anima(anima_config, telemetry_writer=self._anima_writer)
+
+            await self.anima.start()
+            
+            # Setup movement adapter
+            self.movement_adapter = MovementAdapter(
+                self.deps.movement_manager,
+                base_antenna_amplitude=config.ANTENNA_BASE_AMPLITUDE,
+                base_antenna_frequency=config.ANTENNA_BASE_FREQUENCY,
+                sigma=config.ANIMA_TRANSITION_SIGMA,
+                vadcc_exponent=config.ANIMA_VADCC_EXPONENT,
+            )
+            
+            # Subscribe adapter to anima
+            self.anima.subscribe(self.movement_adapter.update)
+            
+            # Wire adapter into MovementManager
+            self.deps.movement_manager.set_movement_adapter(self.movement_adapter)
+            
+            logger.info("✓ Anima emotional engine initialized")
+        except Exception as e:
+            logger.error(f"✗ Anima initialization failed: {e}")
+            raise RuntimeError(f"Anima emotional engine not available: {e}")
 
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
@@ -335,17 +353,6 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                     # Doesn't mean the audio is done playing
                     logger.debug("Response done")
 
-
-
-                    response = getattr(event, "response", None)
-                    usage = getattr(response, "usage", None) if response else None
-                    if usage:
-                        cost = _compute_response_cost(usage)
-                        self.cumulative_cost += cost
-                        logger.debug("Cost: $%.4f | Cumulative: $%.4f", cost, self.cumulative_cost)
-                    else:
-                        logger.warning("No usage data available for cost tracking")
-
                 # Handle partial transcription (user speaking in real-time)
                 if event.type == "conversation.item.input_audio_transcription.partial":
                     logger.debug(f"User partial transcript: {event.transcript}")
@@ -381,11 +388,17 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
                     await self.output_queue.put(AdditionalOutputs({"role": "user", "content": event.transcript}))
 
-                # Handle assistant transcription
+                # Handle assistant transcription - feed to Anima
                 if event.type in ("response.audio_transcript.done", "response.output_audio_transcript.done"):
                     logger.debug(f"Assistant transcript: {event.transcript}")
                     await self.output_queue.put(AdditionalOutputs({"role": "assistant", "content": event.transcript}))
 
+                    if self.anima is not None:
+                        logger.info(f"[ANIMA] Feeding transcript to Anima: '{event.transcript[:80]}...'")
+                        asyncio.create_task(self.anima.process_text(event.transcript))
+                    else:
+                        logger.warning("[ANIMA] anima is None — skipping process_text")
+                
                 # Handle audio delta
                 if event.type in ("response.audio.delta", "response.output_audio.delta"):
                     if self.deps.head_wobbler is not None:
@@ -566,6 +579,15 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
     async def shutdown(self) -> None:
         """Shutdown the handler."""
         self._shutdown_requested = True
+        
+        # Shutdown Anima emotional engine
+        if self.anima is not None:
+            try:
+                await self.anima.stop()
+                logger.info("Anima emotional engine stopped")
+            except Exception as e:
+                logger.debug(f"Anima shutdown error: {e}")
+        
         # Cancel any pending debounce task
         if self.partial_transcript_task and not self.partial_transcript_task.done():
             self.partial_transcript_task.cancel()
