@@ -5,7 +5,7 @@ colorFrom: red
 colorTo: blue
 sdk: static
 pinned: false
-short_description: Watch Reachy Mini express emotion while you talk to it!
+short_description: Express emotion with Anima!
 tags:
  - reachy_mini
  - reachy_mini_python_app
@@ -203,7 +203,7 @@ Built-in motion content is published as open Hugging Face datasets:
 
 Create custom profiles with dedicated instructions and enabled tools.
 
-Set `REACHY_MINI_CUSTOM_PROFILE=<name>` to load `src/reachy_mini_conversation_app/profiles/<name>/` (see `.env.example`). If unset, the `default` profile is used.
+Set `REACHY_MINI_CUSTOM_PROFILE=<name>` to load `src/anima_conversation_app/profiles/<name>/` (see `.env.example`). If unset, the `default` profile is used.
 
 Each profile should include `instructions.txt` (prompt text). `tools.txt` (list of allowed tools) is recommended. If missing for a non-default profile, the app falls back to `profiles/default/tools.txt`. Profiles can optionally contain custom tool implementations.
 
@@ -214,7 +214,7 @@ Write plain-text prompts in `instructions.txt`. To reuse shared prompt pieces, a
 [passion_for_lobster_jokes]
 [identities/witty_identity]
 ```
-Each placeholder pulls the matching file under `src/reachy_mini_conversation_app/prompts/` (nested paths allowed). See `src/reachy_mini_conversation_app/profiles/example/` for a reference layout.
+Each placeholder pulls the matching file under `src/anima_conversation_app/prompts/` (nested paths allowed). See `src/anima_conversation_app/profiles/example/` for a reference layout.
 
 **Enabling tools:**
 
@@ -226,17 +226,17 @@ play_emotion
 # My custom tool defined locally
 sweep_look
 ```
-Tools are resolved first from Python files in the profile folder (custom tools), then from the core library `src/reachy_mini_conversation_app/tools/` (like `dance`, `head_tracking`).
+Tools are resolved first from Python files in the profile folder (custom tools), then from the core library `src/anima_conversation_app/tools/` (like `dance`, `head_tracking`).
 
 **Custom tools:**
 
 On top of built-in tools found in the core library, you can implement custom tools specific to your profile by adding Python files in the profile folder.
-Custom tools must subclass `reachy_mini_conversation_app.tools.core_tools.Tool` (see `profiles/example/sweep_look.py`).
+Custom tools must subclass `anima_conversation_app.tools.core_tools.Tool` (see `profiles/example/sweep_look.py`).
 
 **Edit personalities from the UI:**
 
 When running with `--gradio`, open the "Personality" accordion:
-- Select among available profiles (folders under `src/reachy_mini_conversation_app/profiles/`) or the built‑in default.
+- Select among available profiles (folders under `src/anima_conversation_app/profiles/`) or the built‑in default.
 - Click "Apply" to update the current session instructions live.
 - Create a new personality by entering a name and instructions text. It stores files under `profiles/<name>/` and copies `tools.txt` from the `default` profile.
 
@@ -247,7 +247,7 @@ Note: The "Personality" panel updates the conversation instructions. Tool sets a
 <details>
 <summary><b>Locked profile mode</b></summary>
 
-To create a locked variant of the app that cannot switch profiles, edit `src/reachy_mini_conversation_app/config.py` and set the `LOCKED_PROFILE` constant to the desired profile name:
+To create a locked variant of the app that cannot switch profiles, edit `src/anima_conversation_app/config.py` and set the `LOCKED_PROFILE` constant to the desired profile name:
 ```python
 LOCKED_PROFILE: str | None = "mars_rover"  # Lock to this profile
 ```
@@ -259,10 +259,10 @@ This is useful for creating dedicated clones of the app with a fixed personality
 <details>
 <summary><b>External profiles and tools</b></summary>
 
-You can extend the app with profiles/tools stored outside `src/reachy_mini_conversation_app/`.
+You can extend the app with profiles/tools stored outside `src/anima_conversation_app/`.
 
-- Core profiles are under `src/reachy_mini_conversation_app/profiles/`.
-- Core tools are under `src/reachy_mini_conversation_app/tools/`.
+- Core profiles are under `src/anima_conversation_app/profiles/`.
+- Core tools are under `src/anima_conversation_app/tools/`.
 
 **Recommended layout:**
 
@@ -291,7 +291,7 @@ REACHY_MINI_EXTERNAL_TOOLS_DIRECTORY=./external_content/external_tools
 
 **Loading behavior:**
 
-- **Default/strict mode**: `tools.txt` defines enabled tools explicitly. Every name in `tools.txt` must resolve to either a built-in tool (`src/reachy_mini_conversation_app/tools/`) or an external tool module in `REACHY_MINI_EXTERNAL_TOOLS_DIRECTORY`.
+- **Default/strict mode**: `tools.txt` defines enabled tools explicitly. Every name in `tools.txt` must resolve to either a built-in tool (`src/anima_conversation_app/tools/`) or an external tool module in `REACHY_MINI_EXTERNAL_TOOLS_DIRECTORY`.
 - **Convenience mode** (`AUTOLOAD_EXTERNAL_TOOLS=1`): all valid `*.py` tool files in `REACHY_MINI_EXTERNAL_TOOLS_DIRECTORY` are auto-added.
 - **External profile fallback**: if the selected external profile has no `tools.txt`, the app falls back to built-in `profiles/default/tools.txt`.
 

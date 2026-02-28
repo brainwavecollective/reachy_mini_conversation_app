@@ -1,4 +1,4 @@
-"""Logging setup for reachy_mini_conversation_app.
+"""Logging setup for anima_conversation_app.
 
 Rules:
 - App name derived from current working directory (not env vars, not __file__)

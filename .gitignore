@@ -58,7 +58,7 @@ cache/
 .nfs*
 
 # User-created personalities (managed by UI)
-src/reachy_mini_conversation_app/profiles/user_personalities/
+src/anima_conversation_app/profiles/user_personalities/
 
 # Non-distributable data
 data/

@@ -19,8 +19,8 @@ jobs:
       - name: Sync GitHub to Hugging Face Hub
         uses: huggingface/hub-sync@v0.1.0
         with:
-          github_repo_id: brainwavecollective/reachy_mini_conversation_app
-          huggingface_repo_id: danielritchie/reachy_mini_anima_conversation_app
+          github_repo_id: brainwavecollective/anima_conversation_app
+          huggingface_repo_id: danielritchie/anima_conversation_app
           hf_token: ${{ secrets.HF_TOKEN }}
           repo_type: space
           space_sdk: gradio

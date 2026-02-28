@@ -141,7 +141,7 @@ class TelemetryConfig:
 
         Example: 10 Hz → every 10 ticks. Clamped to at least 1.
         """
-        from reachy_mini_conversation_app.moves import CONTROL_LOOP_FREQUENCY_HZ
+        from anima_conversation_app.moves import CONTROL_LOOP_FREQUENCY_HZ
         return max(1, round(CONTROL_LOOP_FREQUENCY_HZ / self.sample_rate_hz))
 
     @property

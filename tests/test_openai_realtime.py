@@ -6,9 +6,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import reachy_mini_conversation_app.openai_realtime as rt_mod
-from reachy_mini_conversation_app.openai_realtime import OpenaiRealtimeHandler, _compute_response_cost
-from reachy_mini_conversation_app.tools.core_tools import ToolDependencies
+import anima_conversation_app.openai_realtime as rt_mod
+from anima_conversation_app.openai_realtime import OpenaiRealtimeHandler, _compute_response_cost
+from anima_conversation_app.tools.core_tools import ToolDependencies
 
 
 def _build_handler(loop: asyncio.AbstractEventLoop) -> OpenaiRealtimeHandler:

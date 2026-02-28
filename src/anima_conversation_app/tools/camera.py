@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 import cv2
 
-from reachy_mini_conversation_app.tools.core_tools import Tool, ToolDependencies
+from anima_conversation_app.tools.core_tools import Tool, ToolDependencies
 
 
 logger = logging.getLogger(__name__)
