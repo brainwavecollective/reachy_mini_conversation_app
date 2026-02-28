@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "reachy_mini_anima_conversation_app"
+name = "anima_conversation_app"
 version = "0.2.2"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
@@ -74,10 +74,10 @@ dev = [
 ]
 
 [project.scripts]
-reachy-mini-conversation-app = "reachy_mini_conversation_app.main:main"
+anima-conversation-app = "anima_conversation_app.main:main"
 
 [project.entry-points."reachy_mini_apps"]
-reachy_mini_conversation_app = "reachy_mini_conversation_app.main:ReachyMiniConversationApp"
+anima_conversation_app = "anima_conversation_app.main:ReachyMiniConversationApp"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -88,7 +88,7 @@ where = ["src"]
 exclude = ["build*", "dist*", "*.egg-info*"]
 
 [tool.setuptools.package-data]
-reachy_mini_conversation_app = [
+anima_conversation_app = [
   "images/*",
   "static/*",
   "profiles/*/*.txt",
@@ -120,7 +120,7 @@ ignore = [
 length-sort = true
 lines-after-imports = 2
 no-lines-before = ["standard-library", "local-folder"]
-known-local-folder = ["reachy_mini_conversation_app"]
+known-local-folder = ["anima_conversation_app"]
 known-first-party = ["reachy_mini", "reachy_mini_dances_library", "reachy_mini_toolbox"]
 split-on-trailing-comma = true
 

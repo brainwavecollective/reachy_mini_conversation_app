@@ -12,14 +12,14 @@ from pathlib import Path
 from dataclasses import dataclass
 
 from reachy_mini import ReachyMini
-from reachy_mini_conversation_app.config import DEFAULT_PROFILES_DIRECTORY as DEFAULT_PROFILES_PATH  # noqa: F401
-from reachy_mini_conversation_app.config import config
+from anima_conversation_app.config import DEFAULT_PROFILES_DIRECTORY as DEFAULT_PROFILES_PATH  # noqa: F401
+from anima_conversation_app.config import config
 
 
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_PROFILES_MODULE = "reachy_mini_conversation_app.profiles"
+DEFAULT_PROFILES_MODULE = "anima_conversation_app.profiles"
 
 
 if not logger.handlers:
@@ -232,7 +232,7 @@ def _load_profile_tools() -> None:
 
         # Try tools directory if not found in profile
         if not loaded:
-            shared_module_path = f"reachy_mini_conversation_app.tools.{tool_name}"
+            shared_module_path = f"anima_conversation_app.tools.{tool_name}"
             try:
                 source = _try_load_tool(
                     tool_name,

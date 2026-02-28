@@ -62,10 +62,10 @@ from reachy_mini.utils.interpolation import (
     linear_pose_interpolation,
 )
 
-from reachy_mini_conversation_app.config import config
-from reachy_mini_conversation_app.ik_workspace import IKWorkspace
-from reachy_mini_conversation_app.telemetry import TelemetryWriter, build_record
-from reachy_mini_conversation_app.logging_setup import get_kinematics_telemetry_path
+from anima_conversation_app.config import config
+from anima_conversation_app.ik_workspace import IKWorkspace
+from anima_conversation_app.telemetry import TelemetryWriter, build_record
+from anima_conversation_app.logging_setup import get_kinematics_telemetry_path
 
 logger = logging.getLogger(__name__)
 

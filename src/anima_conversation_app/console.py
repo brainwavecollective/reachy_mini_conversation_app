@@ -22,9 +22,9 @@ from scipy.signal import resample
 
 from reachy_mini import ReachyMini
 from reachy_mini.media.media_manager import MediaBackend
-from reachy_mini_conversation_app.config import LOCKED_PROFILE, config
-from reachy_mini_conversation_app.openai_realtime import OpenaiRealtimeHandler
-from reachy_mini_conversation_app.headless_personality_ui import mount_personality_routes
+from anima_conversation_app.config import LOCKED_PROFILE, config
+from anima_conversation_app.openai_realtime import OpenaiRealtimeHandler
+from anima_conversation_app.headless_personality_ui import mount_personality_routes
 
 
 try:
@@ -117,7 +117,7 @@ class LocalStream:
           * If ``.env`` exists, replaces/append OPENAI_API_KEY line.
           * Else, copies template from ``<instance_path>/.env.example`` when present,
             otherwise falls back to the packaged template
-            ``reachy_mini_conversation_app/.env.example``.
+            ``anima_conversation_app/.env.example``.
           * Ensures the resulting file contains the full template plus the key.
         - Loads the written ``.env`` into the current process environment.
         """
@@ -168,7 +168,7 @@ class LocalStream:
             return
         selection = (profile or "").strip() or None
         try:
-            from reachy_mini_conversation_app.config import set_custom_profile
+            from anima_conversation_app.config import set_custom_profile
 
             set_custom_profile(selection)
         except Exception:
@@ -264,7 +264,7 @@ class LocalStream:
         @self._settings_app.get("/ready")
         def _ready() -> JSONResponse:
             try:
-                mod = sys.modules.get("reachy_mini_conversation_app.tools.core_tools")
+                mod = sys.modules.get("anima_conversation_app.tools.core_tools")
                 ready = bool(getattr(mod, "_TOOLS_INITIALIZED", False)) if mod else False
             except Exception:
                 ready = False
@@ -320,7 +320,7 @@ class LocalStream:
             try:
                 from dotenv import load_dotenv
 
-                from reachy_mini_conversation_app.config import set_custom_profile
+                from anima_conversation_app.config import set_custom_profile
 
                 env_path = Path(self._instance_path) / ".env"
                 if env_path.exists():

@@ -3,7 +3,7 @@ import sys
 import logging
 from pathlib import Path
 
-from reachy_mini_conversation_app.config import DEFAULT_PROFILES_DIRECTORY, config
+from anima_conversation_app.config import DEFAULT_PROFILES_DIRECTORY, config
 
 
 logger = logging.getLogger(__name__)

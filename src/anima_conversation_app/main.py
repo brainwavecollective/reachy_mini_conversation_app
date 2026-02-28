@@ -14,13 +14,13 @@ from fastrtc import Stream
 from gradio.utils import get_space
 
 from reachy_mini import ReachyMini, ReachyMiniApp
-from reachy_mini_conversation_app.utils import (
+from anima_conversation_app.utils import (
     parse_args,
     setup_logger,
     handle_vision_stuff,
     log_connection_troubleshooting,
 )
-from reachy_mini_conversation_app.config import config
+from anima_conversation_app.config import config
 
 import logging
 
@@ -45,23 +45,23 @@ def run(
 ) -> None:
     """Run the Reachy Mini conversation app."""
     # Putting these dependencies here makes the dashboard faster to load when the conversation app is installed
-    from reachy_mini_conversation_app.moves import MovementManager
-    from reachy_mini_conversation_app.console import LocalStream
-    from reachy_mini_conversation_app.openai_realtime import OpenaiRealtimeHandler
-    from reachy_mini_conversation_app.tools.core_tools import ToolDependencies
-    from reachy_mini_conversation_app.audio.head_wobbler import HeadWobbler
-    from reachy_mini_conversation_app.logging_setup import (
+    from anima_conversation_app.moves import MovementManager
+    from anima_conversation_app.console import LocalStream
+    from anima_conversation_app.openai_realtime import OpenaiRealtimeHandler
+    from anima_conversation_app.tools.core_tools import ToolDependencies
+    from anima_conversation_app.audio.head_wobbler import HeadWobbler
+    from anima_conversation_app.logging_setup import (
         get_session_id,
         get_anima_telemetry_path,
         get_conversation_telemetry_path,
     )
-    from reachy_mini_conversation_app.conversation_telemetry import ConversationTelemetryWriter
+    from anima_conversation_app.conversation_telemetry import ConversationTelemetryWriter
     from anima import AnimaTelemetryWriter
 
     logger = setup_logger(args.debug)
 
     # Suppress noisy submodule logs
-    logging.getLogger("reachy_mini_conversation_app.openai_realtime").setLevel(logging.WARNING)
+    logging.getLogger("anima_conversation_app.openai_realtime").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -178,7 +178,7 @@ def run(
             value=os.getenv("OPENAI_API_KEY") if not get_space() else "",
         )
 
-        from reachy_mini_conversation_app.gradio_personality import PersonalityUI
+        from anima_conversation_app.gradio_personality import PersonalityUI
 
         personality_ui = PersonalityUI()
         personality_ui.create_components()

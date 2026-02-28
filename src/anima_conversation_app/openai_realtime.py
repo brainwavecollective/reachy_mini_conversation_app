@@ -19,9 +19,9 @@ from websockets.exceptions import ConnectionClosedError
 from anima import Anima, Config as AnimaConfig
 from anima_reachy_conversation import MovementAdapter
 
-from reachy_mini_conversation_app.config import config
-from reachy_mini_conversation_app.prompts import get_session_voice, get_session_instructions
-from reachy_mini_conversation_app.tools.core_tools import (
+from anima_conversation_app.config import config
+from anima_conversation_app.prompts import get_session_voice, get_session_instructions
+from anima_conversation_app.tools.core_tools import (
     ToolDependencies,
     get_tool_specs,
     dispatch_tool_call,
@@ -99,8 +99,8 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         """
         try:
             # Update the in-process config value and env
-            from reachy_mini_conversation_app.config import config as _config
-            from reachy_mini_conversation_app.config import set_custom_profile
+            from anima_conversation_app.config import config as _config
+            from anima_conversation_app.config import set_custom_profile
 
             set_custom_profile(profile)
             logger.info(

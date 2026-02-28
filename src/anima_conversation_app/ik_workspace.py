@@ -9,7 +9,7 @@ Yaw, x, and y are logged as context but not hull-checked — they stay
 well within limits across all defined emotional anchors.
 
 Usage:
-    from reachy_mini_conversation_app.ik_workspace import IKWorkspace
+    from anima_conversation_app.ik_workspace import IKWorkspace
 
     ws = IKWorkspace()               # loads hull once at import/init
     result = ws.check(z, pitch, roll)
