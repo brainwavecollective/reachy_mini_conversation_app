@@ -107,7 +107,8 @@ def run(
 
     # Auto-enable Gradio in simulation mode (both MuJoCo for deamon and mockup-sim for desktop app)
     status = robot.client.get_status()
-    is_simulation = status.get("simulation_enabled", False) or status.get("mockup_sim_enabled", False)
+    is_simulation = getattr(status, "simulation_enabled", False) or getattr(status, "mockup_sim_enabled", False)
+
 
     if is_simulation and not args.gradio:
         logger.info("Simulation mode detected. Automatically enabling gradio flag.")
