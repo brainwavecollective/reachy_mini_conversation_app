@@ -211,10 +211,17 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
             self.deps.movement_manager.set_movement_adapter(self.movement_adapter)
 
             # Wire eye color adapter
-            eyes = getattr(self.deps.reachy_mini, "component", {}) or {}
-            eyes = eyes.get("reachy-eyes") if isinstance(eyes, dict) else None
+            try:
+                from reachy_eyes import ReachyEyes
+                from reachy_eyes.device import EyesDevice
+                eyes = ReachyEyes(EyesDevice.discover())
+                logger.info("[EYES] Hardware initialized")
+            except Exception as e:
+                logger.warning("[EYES] Eye hardware not found, running without eyes: %s", e)
+                eyes = None
             self.reachy_eyes_adapter = ReachyEyesAdapter(eyes)
             self.anima.subscribe(self.reachy_eyes_adapter.update)
+
             
             logger.info("✓ Anima emotional engine initialized")
         except Exception as e:
