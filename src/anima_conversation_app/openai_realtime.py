@@ -18,6 +18,7 @@ from websockets.exceptions import ConnectionClosedError
 
 from anima import Anima, Config as AnimaConfig
 from anima_reachy_conversation import MovementAdapter
+from anima_conversation_app.reachy_eyes_adapter import ReachyEyesAdapter
 
 from anima_conversation_app.config import config
 from anima_conversation_app.prompts import get_session_voice, get_session_instructions
@@ -76,6 +77,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         # Anima emotional engine integration
         self.anima: Optional[Anima] = None
         self.movement_adapter: Optional[MovementAdapter] = None
+        self.reachy_eyes_adapter: Optional[ReachyEyesAdapter] = None
         self._anima_writer = anima_writer
 
         # Internal lifecycle flags
@@ -207,6 +209,12 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
             
             # Wire adapter into MovementManager
             self.deps.movement_manager.set_movement_adapter(self.movement_adapter)
+
+            # Wire eye color adapter
+            eyes = getattr(self.deps.reachy_mini, "component", {}) or {}
+            eyes = eyes.get("reachy-eyes") if isinstance(eyes, dict) else None
+            self.reachy_eyes_adapter = ReachyEyesAdapter(eyes)
+            self.anima.subscribe(self.reachy_eyes_adapter.update)
             
             logger.info("✓ Anima emotional engine initialized")
         except Exception as e:

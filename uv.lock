@@ -180,6 +180,7 @@ dependencies = [
     { name = "openai" },
     { name = "opencv-python" },
     { name = "python-dotenv" },
+    { name = "reachy-eyes" },
     { name = "reachy-mini" },
     { name = "reachy-mini-dances-library" },
     { name = "reachy-mini-toolbox" },
@@ -241,6 +242,7 @@ requires-dist = [
     { name = "opencv-python", specifier = ">=4.12.0.88" },
     { name = "pygobject", marker = "extra == 'reachy-mini-wireless'", specifier = ">=3.42.2,<=3.46.0" },
     { name = "python-dotenv" },
+    { name = "reachy-eyes", specifier = ">=0.1.0" },
     { name = "reachy-mini", specifier = ">=1.3.1" },
     { name = "reachy-mini-dances-library" },
     { name = "reachy-mini-toolbox" },
@@ -3413,6 +3415,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f6/45/eafb0bba0f9988f6a2520f9ca2df2c82ddfa8d67c95d6625452e97b204a5/questionary-2.1.1.tar.gz", hash = "sha256:3d7e980292bb0107abaa79c68dd3eee3c561b83a0f89ae482860b181c8bd412d", size = 25845, upload-time = "2025-08-28T19:00:20.851Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3c/26/1062c7ec1b053db9e499b4d2d5bc231743201b74051c973dadeac80a8f43/questionary-2.1.1-py3-none-any.whl", hash = "sha256:a51af13f345f1cdea62347589fbb6df3b290306ab8930713bfae4d475a7d4a59", size = 36753, upload-time = "2025-08-28T19:00:19.56Z" },
+]
+
+[[package]]
+name = "reachy-eyes"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyserial" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f0/ce/0689d165a030cfdbb121e1f33fadb28243f71fe83920ae8cdb0490c5be7b/reachy_eyes-0.1.0.tar.gz", hash = "sha256:67e447b2bd2686190bf6c89640c242d3223de245f5d92756b1e6e67d478049ef", size = 12160, upload-time = "2026-03-04T23:30:21.251Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/32/bae5af0eb68a32abb9117b41f419fd33211cfa71e5c62026d1ea2886fdce/reachy_eyes-0.1.0-py3-none-any.whl", hash = "sha256:74c766126d47183881225a93d24417a955942dc05a3f94337bacc30b9525c1f1", size = 10501, upload-time = "2026-03-04T23:30:19.952Z" },
 ]
 
 [[package]]
