@@ -219,7 +219,10 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
             except Exception as e:
                 logger.warning("[EYES] Eye hardware not found, running without eyes: %s", e)
                 eyes = None
-            self.reachy_eyes_adapter = ReachyEyesAdapter(eyes)
+            self.reachy_eyes_adapter = ReachyEyesAdapter(
+                eyes,
+                vadcc_exponent=config.ANIMA_EYE_VADCC_EXPONENT,
+            )
             self.anima.subscribe(self.reachy_eyes_adapter.update)
 
             

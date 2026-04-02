@@ -34,6 +34,7 @@ class ReachyEyesAdapter:
         self,
         eyes,  # ReachyEyes instance, or None when hardware is unavailable
         min_send_interval: float = _MIN_SEND_INTERVAL,
+        vadcc_exponent: float = 0.84,
     ) -> None:
         """Initialise the adapter.
 
@@ -47,6 +48,7 @@ class ReachyEyesAdapter:
         """
         self._eyes = eyes
         self._min_send_interval = min_send_interval
+        self._vadcc_exponent = vadcc_exponent
         self._last_send_time: float = 0.0
         self._last_vadcc: Optional[Tuple[float, float, float, float, float]] = None
         self._last_log_time: float = 0.0
@@ -59,6 +61,13 @@ class ReachyEyesAdapter:
     # ------------------------------------------------------------------
     # Anima subscriber interface
     # ------------------------------------------------------------------
+
+    def _amplify_vadcc(
+        self, vadcc: Tuple[float, float, float, float, float]
+    ) -> Tuple[float, float, float, float, float]:
+        centered = np.array(vadcc) - 0.5
+        amplified = np.sign(centered) * np.power(np.abs(centered), self._vadcc_exponent)
+        return tuple(0.5 + amplified)
 
     def update(self, vadcc: Tuple[float, float, float, float, float]) -> None:
         """Receive a VADCC tuple from Anima and forward it to the eyes.
@@ -77,7 +86,7 @@ class ReachyEyesAdapter:
         if now - self._last_send_time < self._min_send_interval:
             return
 
-        val, aro, dom, cplx, coh = vadcc
+        val, aro, dom, cplx, coh = self._amplify_vadcc(vadcc)
 
         try:
             self._eyes._device.send_command(
