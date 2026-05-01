@@ -11,8 +11,10 @@ Usage:
 """
 
 import logging
+import numpy as np
 import time
 from typing import Optional, Tuple
+
 
 logger = logging.getLogger(__name__)
 

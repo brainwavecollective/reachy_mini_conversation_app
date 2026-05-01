@@ -169,10 +169,11 @@ class Config:
         str(Path(__file__).resolve().parents[2] / "data" / "NRC-VAD-Lexicon-v2.1" / "NRC-VAD-Lexicon-v2.1.txt"),
     )
 
-    # Separate amplifier for independent tuning of eyes vs. body
+
     ANIMA_TRANSITION_SIGMA: float = float(os.getenv("ANIMA_TRANSITION_SIGMA", "0.17"))
+    # Separate amplifier for independent tuning of eyes vs. body, lower is more intense 
     ANIMA_VADCC_EXPONENT: float = float(os.getenv("ANIMA_VADCC_EXPONENT", "0.84"))
-    ANIMA_EYE_VADCC_EXPONENT: float = float(os.getenv("ANIMA_EYE_VADCC_EXPONENT", "0.84"))
+    ANIMA_EYE_VADCC_EXPONENT: float = float(os.getenv("ANIMA_EYE_VADCC_EXPONENT", "0.4"))
 
     # Behavior baseline for breathing, speech sway, and idle antenna motion
     ANTENNA_BASE_AMPLITUDE: float = float(os.getenv("ANTENNA_BASE_AMPLITUDE", "12.0"))
